@@ -1,6 +1,5 @@
 package com.worksafe.backend.global.security.filter;
 
-import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.global.security.exception.JwtTokenException;
 import com.worksafe.backend.global.security.handler.SecurityErrorResponseWriter;
 import com.worksafe.backend.global.security.jwt.JwtTokenProvider;
@@ -63,7 +62,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwtTokenProvider.validateToken(token);
 
         Long userId = jwtTokenProvider.getUserId(token);
-
         List<GrantedAuthority> authorities = extractAuthorities(token);
 
         UsernamePasswordAuthenticationToken authentication =
@@ -86,7 +84,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             JwtTokenException exception
     ) throws IOException {
         SecurityContextHolder.clearContext();
-        ErrorCode errorCode = exception.getErrorCode();
-        securityErrorResponseWriter.write(response, errorCode);
+        securityErrorResponseWriter.write(response, exception.getErrorCode());
     }
 }

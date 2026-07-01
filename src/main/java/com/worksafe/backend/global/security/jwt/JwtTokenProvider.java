@@ -1,12 +1,7 @@
 package com.worksafe.backend.global.security.jwt;
 
-import java.util.Date;
-import java.util.UUID;
-
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.global.security.exception.JwtTokenException;
-import org.springframework.stereotype.Component;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -14,18 +9,23 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SecurityException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
-@Slf4j
+import java.util.Date;
+import java.util.UUID;
+
 @Component
-@RequiredArgsConstructor
 public class JwtTokenProvider {
 
     public static final String CLAIM_ROLE = "role";
 
     private final JwtProperties jwtProperties;
     private final JwtKeyProvider jwtKeyProvider;
+
+    public JwtTokenProvider(JwtProperties jwtProperties, JwtKeyProvider jwtKeyProvider) {
+        this.jwtProperties = jwtProperties;
+        this.jwtKeyProvider = jwtKeyProvider;
+    }
 
     public String createAccessToken(final Long userId, final String role) {
         final Date now = new Date();

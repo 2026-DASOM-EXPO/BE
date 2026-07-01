@@ -1,10 +1,12 @@
 package com.worksafe.backend.global.common.exception;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+public class CustomException extends BusinessException {
 
-@Getter
-@RequiredArgsConstructor
-public class CustomException extends RuntimeException {
-    private final ErrorCode errorCode;
+    public CustomException(ErrorCode errorCode) {
+        super(errorCode);
+    }
+
+    public CustomException(ErrorCode errorCode, Throwable cause) {
+        super(errorCode, cause);
+    }
 }

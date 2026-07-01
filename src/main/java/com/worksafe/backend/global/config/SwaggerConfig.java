@@ -19,8 +19,7 @@ public class SwaggerConfig {
                 .info(apiInfo())
                 .components(new Components()
                         .addSecuritySchemes(SECURITY_SCHEME_NAME, jwtSecurityScheme()))
-                .addSecurityItem(new SecurityRequirement()
-                        .addList(SECURITY_SCHEME_NAME));
+                .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME));
     }
 
     private Info apiInfo() {

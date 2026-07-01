@@ -2,19 +2,20 @@ package com.worksafe.backend.global.security.jwt;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "jwt")
-@Getter
-@RequiredArgsConstructor
-public class JwtProperties {
+public record JwtProperties(
+        @NotBlank String secret,
+        @Positive long accessTokenExpiration,
+        @Positive long refreshTokenExpiration
+) {
 
-    @NotBlank
-    private final String secret;
-    @Positive
-    private final long accessTokenExpirationMs;
-    @Positive
-    private final long refreshTokenExpirationMs;
+    public long getAccessTokenExpirationMs() {
+        return accessTokenExpiration;
+    }
+
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpiration;
+    }
 }
