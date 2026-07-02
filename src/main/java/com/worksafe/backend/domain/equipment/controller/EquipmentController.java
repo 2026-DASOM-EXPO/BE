@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.time.LocalDateTime;
 
-@Tag(name = "Equipment")
+@Tag(name = "안전장비 API", description = "안전장비 등록, 조회, 배정, 착용 상태, 불출/반납, 부저, 작업 타이머 관리")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/equipment")
@@ -37,25 +37,25 @@ public class EquipmentController {
     private final EquipmentService equipmentService;
 
     @PostMapping
-    @Operation(summary = "장비 생성")
+    @Operation(summary = "안전장비 등록")
     public ApiResponse<EquipmentResponse> create(@Valid @RequestBody EquipmentCreateRequest request) {
         return ApiResponse.created(equipmentService.create(request));
     }
 
     @GetMapping
-    @Operation(summary = "장비 목록 조회")
+    @Operation(summary = "안전장비 목록 조회")
     public ApiResponse<List<EquipmentResponse>> findAll() {
         return ApiResponse.success(equipmentService.findAll());
     }
 
     @GetMapping("/status")
-    @Operation(summary = "장비 착용 상태 및 불출/반납 조회")
+    @Operation(summary = "안전장비 착용 상태 및 불출/반납 조회")
     public ApiResponse<List<EquipmentStatusResponse>> findStatus() {
         return ApiResponse.success(equipmentService.findStatus());
     }
 
     @GetMapping("/logs")
-    @Operation(summary = "장비 착용 이력 조회")
+    @Operation(summary = "안전장비 착용 이력 조회")
     public ApiResponse<List<EquipmentLogResponse>> findLogs(
             @RequestParam(required = false) Long workerId,
             @RequestParam(required = false) Long equipmentId,
@@ -66,13 +66,13 @@ public class EquipmentController {
     }
 
     @GetMapping("/{equipmentId}")
-    @Operation(summary = "장비 단건 조회")
+    @Operation(summary = "안전장비 상세 조회")
     public ApiResponse<EquipmentResponse> findById(@PathVariable Long equipmentId) {
         return ApiResponse.success(equipmentService.findById(equipmentId));
     }
 
     @PatchMapping("/{equipmentId}")
-    @Operation(summary = "장비 수정")
+    @Operation(summary = "안전장비 수정")
     public ApiResponse<EquipmentResponse> update(
             @PathVariable Long equipmentId,
             @Valid @RequestBody EquipmentUpdateRequest request
@@ -81,7 +81,7 @@ public class EquipmentController {
     }
 
     @PatchMapping("/{equipmentId}/assign/{workerId}")
-    @Operation(summary = "장비 배정")
+    @Operation(summary = "안전장비 배정")
     public ApiResponse<EquipmentResponse> assign(
             @PathVariable Long equipmentId,
             @PathVariable Long workerId
@@ -90,7 +90,7 @@ public class EquipmentController {
     }
 
     @PatchMapping("/{equipmentId}/wear-status")
-    @Operation(summary = "장비 착용 상태 수정")
+    @Operation(summary = "안전장비 착용 상태 수정")
     public ApiResponse<EquipmentResponse> updateWearStatus(
             @PathVariable Long equipmentId,
             @Valid @RequestBody EquipmentWearStatusRequest request
@@ -99,7 +99,7 @@ public class EquipmentController {
     }
 
     @PatchMapping("/{equipmentId}/manual-wear-status")
-    @Operation(summary = "장비 수동 착용 상태 설정")
+    @Operation(summary = "안전장비 수동 착용 상태 설정")
     public ApiResponse<EquipmentResponse> updateManualWearStatus(
             @PathVariable Long equipmentId,
             @Valid @RequestBody ManualWearStatusRequest request
@@ -135,7 +135,7 @@ public class EquipmentController {
     }
 
     @DeleteMapping("/{equipmentId}")
-    @Operation(summary = "장비 삭제")
+    @Operation(summary = "안전장비 삭제")
     public ApiResponse<Void> delete(@PathVariable Long equipmentId) {
         equipmentService.delete(equipmentId);
         return ApiResponse.success();

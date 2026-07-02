@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Tag(name = "Risk Event API")
+@Tag(name = "위험 이벤트 리포트 API", description = "위험 이벤트 생성 및 드론 영상 연계 사고 리포트 조회")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/events/risk")
@@ -36,7 +36,7 @@ public class RiskEventApiController {
     }
 
     @GetMapping
-    @Operation(summary = "위험 이벤트 및 드론 영상 리포트 조회")
+    @Operation(summary = "위험 이벤트 및 드론 영상 사고 리포트 조회")
     public ApiResponse<List<RiskEventReportResponse>> findReports(
             @RequestParam(required = false) Long workerId,
             @RequestParam(required = false) RiskLevel riskLevel,

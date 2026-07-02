@@ -15,7 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
-@Tag(name = "Alerts")
+@Tag(name = "알림 API", description = "실시간 알림 목록 조회, 읽음 처리, SSE 스트림 연결")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/alerts")
@@ -30,13 +30,13 @@ public class AlertController {
     }
 
     @GetMapping("/unread")
-    @Operation(summary = "읽지 않은 알림 조회")
+    @Operation(summary = "읽지 않은 알림 목록 조회")
     public ApiResponse<List<AlertResponse>> findUnread() {
         return ApiResponse.success(alertService.findUnread());
     }
 
     @PatchMapping("/{alertId}/read")
-    @Operation(summary = "알림 읽음 처리")
+    @Operation(summary = "알림 읽음 상태 변경")
     public ApiResponse<AlertResponse> markAsRead(@PathVariable Long alertId) {
         return ApiResponse.success(alertService.markAsRead(alertId));
     }
@@ -49,7 +49,7 @@ public class AlertController {
     }
 
     @GetMapping("/stream")
-    @Operation(summary = "알림 스트림")
+    @Operation(summary = "실시간 알림 SSE 스트림 연결")
     public SseEmitter stream() {
         return alertService.stream();
     }

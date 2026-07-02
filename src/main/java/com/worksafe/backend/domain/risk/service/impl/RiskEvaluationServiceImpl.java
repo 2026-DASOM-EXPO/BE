@@ -320,8 +320,8 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             Alert alert = alertRepository.save(Alert.builder()
                     .riskEvent(riskEvent)
                     .worker(riskEvent.getWorker())
-                    .title("No available drone")
-                    .message("Drone dispatch skipped because no READY drone exists.")
+                    .title("대기 중인 드론 없음")
+                    .message("대기 중인 드론이 없어 출동을 건너뜁니다.")
                     .severity(mapSeverity(riskEvent.getRiskLevel()))
                     .readStatus(AlertReadStatus.UNREAD)
                     .build());
@@ -395,10 +395,10 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private String alertTitle(RiskEvent riskEvent) {
         return switch (riskEvent.getRiskLevel()) {
-            case LV1 -> "Normal";
-            case LV2 -> "Warning";
-            case LV3 -> "Danger";
-            case LV4 -> "Emergency";
+            case LV1 -> "정상";
+            case LV2 -> "주의";
+            case LV3 -> "위험";
+            case LV4 -> "긴급";
         };
     }
 
@@ -407,12 +407,12 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             return "SOS";
         }
         return switch (riskEvent.getRiskType()) {
-            case BIOMETRIC_ABNORMAL -> "BIOMETRIC_ABNORMAL";
-            case FALL_DETECTED -> "FALL_DETECTED";
-            case NO_EQUIPMENT -> "ALL_EQUIPMENT_OFF";
+            case BIOMETRIC_ABNORMAL -> "생체 이상";
+            case FALL_DETECTED -> "낙상 감지";
+            case NO_EQUIPMENT -> "안전장비 미착용";
             case SOS_REQUEST -> "SOS";
-            case LOCATION_ABNORMAL -> "MANUAL";
-            case DRONE_DISPATCHED -> "MANUAL";
+            case LOCATION_ABNORMAL -> "위치 이상";
+            case DRONE_DISPATCHED -> "수동";
         };
     }
 
@@ -441,12 +441,12 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private String buildDescription(SensorLog sensorLog, RiskType riskType, RiskLevel riskLevel) {
         return switch (riskType) {
-            case BIOMETRIC_ABNORMAL -> String.format(Locale.ROOT, "Biometric anomaly detected (%s).", riskLevel);
-            case FALL_DETECTED -> "Fall detected from motion sensor.";
-            case NO_EQUIPMENT -> "Safety equipment is not worn.";
-            case SOS_REQUEST -> "SOS request detected.";
-            case LOCATION_ABNORMAL -> "Location anomaly detected.";
-            case DRONE_DISPATCHED -> "Drone dispatched.";
+            case BIOMETRIC_ABNORMAL -> String.format(Locale.ROOT, "생체 이상이 감지되었습니다. (%s)", riskLevel);
+            case FALL_DETECTED -> "모션 센서에서 낙상이 감지되었습니다.";
+            case NO_EQUIPMENT -> "안전장비가 착용되지 않았습니다.";
+            case SOS_REQUEST -> "SOS 신고가 접수되었습니다.";
+            case LOCATION_ABNORMAL -> "위치 이상이 감지되었습니다.";
+            case DRONE_DISPATCHED -> "드론이 출동했습니다.";
         };
     }
 }

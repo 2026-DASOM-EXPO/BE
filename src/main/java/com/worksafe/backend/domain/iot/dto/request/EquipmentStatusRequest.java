@@ -1,6 +1,6 @@
 package com.worksafe.backend.domain.iot.dto.request;
 
-import com.worksafe.backend.equipment.enums.WearStatus;
+import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;

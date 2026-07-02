@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Drones")
+@Tag(name = "드론 API", description = "드론 등록, 조회, 수정, 삭제, 출동, 영상 관리")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/drones")
@@ -34,25 +34,25 @@ public class DroneController {
     private final DroneService droneService;
 
     @PostMapping
-    @Operation(summary = "?쒕줎 ?앹꽦")
+    @Operation(summary = "드론 등록")
     public ApiResponse<DroneResponse> create(@Valid @RequestBody DroneCreateRequest request) {
         return ApiResponse.created(droneService.create(request));
     }
 
     @GetMapping
-    @Operation(summary = "?쒕줎 紐⑸줉 議고쉶")
+    @Operation(summary = "드론 목록 조회")
     public ApiResponse<List<DroneResponse>> findAll() {
         return ApiResponse.success(droneService.findAll());
     }
 
     @GetMapping("/{droneId}")
-    @Operation(summary = "?쒕줎 ?④굔 議고쉶")
+    @Operation(summary = "드론 상세 조회")
     public ApiResponse<DroneResponse> findById(@PathVariable Long droneId) {
         return ApiResponse.success(droneService.findById(droneId));
     }
 
     @PatchMapping("/{droneId}")
-    @Operation(summary = "?쒕줎 ?섏젙")
+    @Operation(summary = "드론 정보 수정")
     public ApiResponse<DroneResponse> update(
             @PathVariable Long droneId,
             @Valid @RequestBody DroneUpdateRequest request
@@ -61,14 +61,14 @@ public class DroneController {
     }
 
     @DeleteMapping("/{droneId}")
-    @Operation(summary = "?쒕줎 ??젣")
+    @Operation(summary = "드론 삭제")
     public ApiResponse<Void> delete(@PathVariable Long droneId) {
         droneService.delete(droneId);
         return ApiResponse.success();
     }
 
     @PostMapping("/{droneId}/dispatch")
-    @Operation(summary = "?쒕줎 異쒕룞 ?붿껌")
+    @Operation(summary = "드론 출동 명령")
     public ApiResponse<DroneDispatchResponse> dispatch(
             @PathVariable Long droneId,
             @Valid @RequestBody DroneDispatchCreateRequest request
@@ -77,19 +77,19 @@ public class DroneController {
     }
 
     @GetMapping("/dispatches")
-    @Operation(summary = "?쒕줎 異쒕룞 紐⑸줉 議고쉶")
+    @Operation(summary = "드론 출동 목록 조회")
     public ApiResponse<List<DroneDispatchResponse>> findAllDispatches() {
         return ApiResponse.success(droneService.findAllDispatches());
     }
 
     @GetMapping("/dispatches/{dispatchId}")
-    @Operation(summary = "?쒕줎 異쒕룞 ?④굔 議고쉶")
+    @Operation(summary = "드론 출동 상세 조회")
     public ApiResponse<DroneDispatchResponse> findDispatchById(@PathVariable Long dispatchId) {
         return ApiResponse.success(droneService.findDispatchById(dispatchId));
     }
 
     @PatchMapping("/dispatches/{dispatchId}/status")
-    @Operation(summary = "?쒕줎 異쒕룞 ?곹깭 ?섏젙")
+    @Operation(summary = "드론 출동 상태 변경")
     public ApiResponse<DroneDispatchResponse> updateDispatchStatus(
             @PathVariable Long dispatchId,
             @Valid @RequestBody DroneDispatchStatusUpdateRequest request
@@ -98,7 +98,7 @@ public class DroneController {
     }
 
     @PostMapping("/{droneId}/videos")
-    @Operation(summary = "?쒕줎 ?곸긽 ?앹꽦")
+    @Operation(summary = "드론 영상 송출 생성")
     public ApiResponse<DroneVideoResponse> createVideo(
             @PathVariable Long droneId,
             @Valid @RequestBody DroneVideoCreateRequest request
@@ -107,7 +107,7 @@ public class DroneController {
     }
 
     @GetMapping("/{droneId}/videos/active")
-    @Operation(summary = "?쒖꽦 ?쒕줎 ?곸긽 議고쉶")
+    @Operation(summary = "활성 드론 영상 목록 조회")
     public ApiResponse<DroneVideoResponse> findActiveVideo(@PathVariable Long droneId) {
         return ApiResponse.success(droneService.findActiveVideo(droneId));
     }

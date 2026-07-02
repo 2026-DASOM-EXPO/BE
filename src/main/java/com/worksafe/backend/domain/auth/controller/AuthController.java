@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Auth")
+@Tag(name = "인증 API", description = "회원가입, 로그인, 토큰 재발급, 내 정보 조회, 비밀번호 변경")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")

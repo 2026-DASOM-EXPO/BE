@@ -1,6 +1,6 @@
 package com.worksafe.backend.domain.iot.dto.request;
 
-import com.worksafe.backend.equipment.enums.AttendanceType;
+import com.worksafe.backend.domain.equipment.enums.AttendanceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 

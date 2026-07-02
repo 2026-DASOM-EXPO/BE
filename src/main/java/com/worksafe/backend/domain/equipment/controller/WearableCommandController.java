@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Wearable Commands")
+@Tag(name = "웨어러블 명령 API", description = "부저, 작업 타이머, 착용 상태 변경용 웨어러블 명령 관리")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/wearable-commands")
@@ -27,7 +27,7 @@ public class WearableCommandController {
     private final WearableCommandService wearableCommandService;
 
     @PostMapping
-    @Operation(summary = "웨어러블 명령 생성")
+    @Operation(summary = "웨어러블 명령 등록")
     public ApiResponse<WearableCommandResponse> create(@Valid @RequestBody WearableCommandCreateRequest request) {
         return ApiResponse.created(wearableCommandService.create(request));
     }
@@ -39,7 +39,7 @@ public class WearableCommandController {
     }
 
     @PatchMapping("/{commandId}/ack")
-    @Operation(summary = "웨어러블 명령 ACK")
+    @Operation(summary = "웨어러블 명령 확인 처리")
     public ApiResponse<WearableCommandResponse> acknowledge(@PathVariable Long commandId) {
         return ApiResponse.success(wearableCommandService.acknowledge(commandId));
     }

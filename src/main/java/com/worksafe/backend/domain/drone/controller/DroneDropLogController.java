@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Drone Drop Logs")
+@Tag(name = "드론 투하 로그 API", description = "응급키트 투하 로그 생성, 조회, 상태 변경")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
@@ -37,7 +37,7 @@ public class DroneDropLogController {
     }
 
     @GetMapping("/drone-dispatches/{dispatchId}/drop-logs")
-    @Operation(summary = "응급키트 투하 로그 조회")
+    @Operation(summary = "응급키트 투하 로그 목록 조회")
     public ApiResponse<List<DroneDropLogResponse>> findByDispatchId(@PathVariable Long dispatchId) {
         return ApiResponse.success(droneDropLogService.findByDispatchId(dispatchId));
     }

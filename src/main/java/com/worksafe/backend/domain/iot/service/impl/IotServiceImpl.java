@@ -1,50 +1,47 @@
 package com.worksafe.backend.domain.iot.service.impl;
 
-import com.worksafe.backend.alert.entity.Alert;
-import com.worksafe.backend.alert.enums.AlertReadStatus;
-import com.worksafe.backend.alert.enums.AlertSeverity;
-import com.worksafe.backend.alert.repository.AlertRepository;
-import com.worksafe.backend.alert.service.AlertRealtimeService;
-import com.worksafe.backend.drone.entity.DroneDispatch;
-import com.worksafe.backend.drone.enums.DroneDispatchStatus;
-import com.worksafe.backend.drone.enums.DroneStatus;
-import com.worksafe.backend.drone.repository.DroneDispatchRepository;
-import com.worksafe.backend.drone.repository.DroneRepository;
-import com.worksafe.backend.equipment.entity.Equipment;
-import com.worksafe.backend.equipment.enums.AttendanceType;
-import com.worksafe.backend.equipment.enums.WearStatus;
-import com.worksafe.backend.equipment.repository.EquipmentRepository;
+import com.worksafe.backend.domain.alert.converter.AlertConverter;
+import com.worksafe.backend.domain.alert.entity.Alert;
+import com.worksafe.backend.domain.alert.enums.AlertReadStatus;
+import com.worksafe.backend.domain.alert.enums.AlertSeverity;
+import com.worksafe.backend.domain.alert.repository.AlertRepository;
+import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
+import com.worksafe.backend.domain.drone.entity.DroneDispatch;
+import com.worksafe.backend.domain.drone.enums.DroneDispatchStatus;
+import com.worksafe.backend.domain.drone.enums.DroneStatus;
+import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
+import com.worksafe.backend.domain.drone.repository.DroneRepository;
+import com.worksafe.backend.domain.equipment.entity.Equipment;
+import com.worksafe.backend.domain.equipment.enums.AttendanceType;
+import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
-import com.worksafe.backend.iot.dto.request.AttendanceRequest;
-import com.worksafe.backend.iot.dto.request.BiometricRequest;
-import com.worksafe.backend.iot.dto.request.DroneObstacleRequest;
-import com.worksafe.backend.iot.dto.request.EquipmentStatusRequest;
-import com.worksafe.backend.iot.dto.request.GpsRequest;
-import com.worksafe.backend.iot.dto.request.ImuRequest;
-import com.worksafe.backend.iot.dto.request.SosRequest;
-import com.worksafe.backend.iot.dto.response.AttendanceResponse;
-import com.worksafe.backend.iot.service.IotService;
-import com.worksafe.backend.risk.converter.RiskEventConverter;
-import com.worksafe.backend.risk.dto.request.RiskEventCreateRequest;
-import com.worksafe.backend.risk.dto.response.RiskEventResponse;
-import com.worksafe.backend.risk.entity.RiskEvent;
-import com.worksafe.backend.risk.enums.RiskLevel;
-import com.worksafe.backend.risk.enums.RiskSourceType;
-import com.worksafe.backend.risk.enums.RiskStatus;
-import com.worksafe.backend.risk.enums.RiskType;
-import com.worksafe.backend.risk.repository.RiskEventRepository;
-import com.worksafe.backend.risk.service.RiskEvaluationService;
-import com.worksafe.backend.risk.service.RiskService;
-import com.worksafe.backend.sensor.converter.SensorLogConverter;
-import com.worksafe.backend.sensor.dto.request.SensorLogCreateRequest;
-import com.worksafe.backend.sensor.dto.response.SensorLogResponse;
-import com.worksafe.backend.sensor.entity.SensorLog;
-import com.worksafe.backend.sensor.enums.SensorType;
-import com.worksafe.backend.sensor.repository.SensorLogRepository;
-import com.worksafe.backend.worker.entity.Worker;
-import com.worksafe.backend.worker.enums.WorkerStatus;
-import com.worksafe.backend.worker.repository.WorkerRepository;
+import com.worksafe.backend.domain.iot.dto.request.AttendanceRequest;
+import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
+import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
+import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
+import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
+import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
+import com.worksafe.backend.domain.iot.dto.request.SosRequest;
+import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
+import com.worksafe.backend.domain.iot.service.IotService;
+import com.worksafe.backend.domain.risk.dto.request.RiskEventCreateRequest;
+import com.worksafe.backend.domain.risk.dto.response.RiskEventResponse;
+import com.worksafe.backend.domain.risk.enums.RiskLevel;
+import com.worksafe.backend.domain.risk.enums.RiskSourceType;
+import com.worksafe.backend.domain.risk.enums.RiskStatus;
+import com.worksafe.backend.domain.risk.enums.RiskType;
+import com.worksafe.backend.domain.risk.repository.RiskEventRepository;
+import com.worksafe.backend.domain.risk.service.RiskEvaluationService;
+import com.worksafe.backend.domain.risk.service.RiskService;
+import com.worksafe.backend.domain.sensor.converter.SensorLogConverter;
+import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
+import com.worksafe.backend.domain.sensor.entity.SensorLog;
+import com.worksafe.backend.domain.sensor.enums.SensorType;
+import com.worksafe.backend.domain.sensor.repository.SensorLogRepository;
+import com.worksafe.backend.domain.worker.entity.Worker;
+import com.worksafe.backend.domain.worker.enums.WorkerStatus;
+import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -230,12 +227,12 @@ public class IotServiceImpl implements IotService {
             Alert alert = alertRepository.save(Alert.builder()
                     .riskEvent(dispatch.getRiskEvent())
                     .worker(dispatch.getRiskEvent() == null ? null : dispatch.getRiskEvent().getWorker())
-                    .title("Drone obstacle detected")
-                    .message("Obstacle detected during drone operation.")
+                    .title("드론 장애물 감지")
+                    .message("드론 운용 중 장애물이 감지되었습니다.")
                     .severity(AlertSeverity.WARNING)
                     .readStatus(AlertReadStatus.UNREAD)
                     .build());
-            alertRealtimeService.publish(com.worksafe.backend.alert.converter.AlertConverter.toResponse(alert));
+            alertRealtimeService.publish(AlertConverter.toResponse(alert));
         }
 
         return SensorLogConverter.toResponse(saved);

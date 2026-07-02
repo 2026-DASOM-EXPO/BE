@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Sensor Logs")
+@Tag(name = "센서 로그 API", description = "센서 로그 생성, 전체 조회, 작업자/장비별 조회, 최신 로그 조회")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/sensor-logs")

@@ -95,14 +95,14 @@ public class DroneServiceImpl implements DroneService {
                 .riskEvent(riskEvent)
                 .targetLatitude(request.targetLatitude() != null ? request.targetLatitude() : riskEvent.getLatitude())
                 .targetLongitude(request.targetLongitude() != null ? request.targetLongitude() : riskEvent.getLongitude())
-                .dispatchReason("MANUAL")
+                .dispatchReason("수동")
                 .emergencyKitMounted(true)
                 .emergencyKitDropped(false)
                 .dropMethod(DropMethod.MANUAL)
                 .emergencyCallRequested(false)
                 .emergencyCallStatus(EmergencyCallStatus.NOT_REQUESTED)
                 .status(DroneDispatchStatus.DISPATCHED)
-                .commandMessage(request.commandMessage() == null ? "Manual dispatch request" : request.commandMessage())
+                .commandMessage(request.commandMessage() == null ? "수동 출동 요청" : request.commandMessage())
                 .dispatchedAt(LocalDateTime.now())
                 .build());
 

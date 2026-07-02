@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Risk Events")
+@Tag(name = "위험 이벤트 API", description = "위험 이벤트 생성, 목록 조회, 단건 조회, 상태 수정, 작업자별 조회")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/risk-events")
@@ -55,7 +55,7 @@ public class RiskEventController {
     }
 
     @GetMapping("/workers/{workerId}")
-    @Operation(summary = "작업자별 위험 이벤트 조회")
+    @Operation(summary = "작업자별 위험 이벤트 목록 조회")
     public ApiResponse<List<RiskEventResponse>> findByWorkerId(@PathVariable Long workerId) {
         return ApiResponse.success(riskService.findByWorkerId(workerId));
     }

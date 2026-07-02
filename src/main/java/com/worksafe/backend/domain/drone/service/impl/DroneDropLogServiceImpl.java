@@ -86,8 +86,8 @@ public class DroneDropLogServiceImpl implements DroneDropLogService {
             Alert alert = alertRepository.save(Alert.builder()
                     .riskEvent(dispatch.getRiskEvent())
                     .worker(dispatch.getRiskEvent() == null ? null : dispatch.getRiskEvent().getWorker())
-                    .title("Drop failed")
-                    .message("Emergency kit drop failed or was blocked.")
+                    .title("투하 실패")
+                    .message("응급키트 투하가 실패했거나 장애물로 인해 차단되었습니다.")
                     .severity(AlertSeverity.WARNING)
                     .readStatus(AlertReadStatus.UNREAD)
                     .build());
@@ -104,8 +104,8 @@ public class DroneDropLogServiceImpl implements DroneDropLogService {
             Alert alert = alertRepository.save(Alert.builder()
                     .riskEvent(dispatch.getRiskEvent())
                     .worker(dispatch.getRiskEvent() == null ? null : dispatch.getRiskEvent().getWorker())
-                    .title("Emergency kit dropped")
-                    .message("Emergency kit delivery completed.")
+                    .title("응급키트 투하 완료")
+                    .message("응급키트 투하가 완료되었습니다.")
                     .severity(AlertSeverity.INFO)
                     .readStatus(AlertReadStatus.UNREAD)
                     .build());

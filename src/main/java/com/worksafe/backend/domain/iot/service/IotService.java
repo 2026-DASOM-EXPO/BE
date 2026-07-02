@@ -1,15 +1,15 @@
 package com.worksafe.backend.domain.iot.service;
 
-import com.worksafe.backend.iot.dto.request.AttendanceRequest;
-import com.worksafe.backend.iot.dto.request.BiometricRequest;
-import com.worksafe.backend.iot.dto.request.DroneObstacleRequest;
-import com.worksafe.backend.iot.dto.request.EquipmentStatusRequest;
-import com.worksafe.backend.iot.dto.request.GpsRequest;
-import com.worksafe.backend.iot.dto.request.ImuRequest;
-import com.worksafe.backend.iot.dto.request.SosRequest;
-import com.worksafe.backend.iot.dto.response.AttendanceResponse;
-import com.worksafe.backend.risk.dto.response.RiskEventResponse;
-import com.worksafe.backend.sensor.dto.response.SensorLogResponse;
+import com.worksafe.backend.domain.iot.dto.request.AttendanceRequest;
+import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
+import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
+import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
+import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
+import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
+import com.worksafe.backend.domain.iot.dto.request.SosRequest;
+import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
+import com.worksafe.backend.domain.risk.dto.response.RiskEventResponse;
+import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 
 public interface IotService {
 

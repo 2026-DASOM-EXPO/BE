@@ -1,6 +1,7 @@
 package com.worksafe.backend.global.common.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.worksafe.backend.global.common.exception.ErrorCode;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -38,4 +39,6 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> fail(String code, String message) {
         return new ApiResponse<>(code, message, null);
     }
+
+    public static ApiResponse<Void> error(ErrorCode errorCode) { return new ApiResponse<>(errorCode.getCode(), errorCode.getMessage(), null); }
 }

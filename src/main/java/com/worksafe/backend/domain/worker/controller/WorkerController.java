@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Workers")
+@Tag(name = "작업자 API", description = "작업자 등록, 목록 조회, 단건 조회, 수정, 위치 갱신, 삭제")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/workers")
@@ -30,7 +30,7 @@ public class WorkerController {
     private final WorkerService workerService;
 
     @PostMapping
-    @Operation(summary = "작업자 생성")
+    @Operation(summary = "작업자 등록")
     public ApiResponse<WorkerResponse> create(@Valid @RequestBody WorkerCreateRequest request) {
         return ApiResponse.created(workerService.create(request));
     }
@@ -42,7 +42,7 @@ public class WorkerController {
     }
 
     @GetMapping("/{workerId}")
-    @Operation(summary = "작업자 단건 조회")
+    @Operation(summary = "작업자 상세 조회")
     public ApiResponse<WorkerResponse> findById(@PathVariable Long workerId) {
         return ApiResponse.success(workerService.findById(workerId));
     }
@@ -57,7 +57,7 @@ public class WorkerController {
     }
 
     @PatchMapping("/{workerId}/location")
-    @Operation(summary = "작업자 위치 수정")
+    @Operation(summary = "작업자 위치 갱신")
     public ApiResponse<WorkerResponse> updateLocation(
             @PathVariable Long workerId,
             @RequestParam Double latitude,
