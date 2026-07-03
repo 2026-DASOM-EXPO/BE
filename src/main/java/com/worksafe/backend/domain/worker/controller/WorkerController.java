@@ -1,5 +1,7 @@
 package com.worksafe.backend.domain.worker.controller;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import com.worksafe.backend.global.common.response.ApiResponse;
 import com.worksafe.backend.domain.worker.dto.request.WorkerCreateRequest;
 import com.worksafe.backend.domain.worker.dto.request.WorkerUpdateRequest;
@@ -9,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @Tag(name = "작업자 API", description = "작업자 등록, 목록 조회, 단건 조회, 수정, 위치 갱신, 삭제")
+@Validated
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/workers")
@@ -60,8 +64,8 @@ public class WorkerController {
     @Operation(summary = "작업자 위치 갱신")
     public ApiResponse<WorkerResponse> updateLocation(
             @PathVariable Long workerId,
-            @RequestParam Double latitude,
-            @RequestParam Double longitude
+            @RequestParam @DecimalMin("-90.0") @DecimalMax("90.0") Double latitude,
+            @RequestParam @DecimalMin("-180.0") @DecimalMax("180.0") Double longitude
     ) {
         return ApiResponse.success(workerService.updateLocation(workerId, latitude, longitude));
     }
