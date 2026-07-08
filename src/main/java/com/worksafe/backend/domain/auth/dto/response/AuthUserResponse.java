@@ -4,7 +4,7 @@ import com.worksafe.backend.domain.auth.enums.UserRole;
 
 public record AuthUserResponse(
         Long id,
-        String username,
+        String loginId,
         String name,
         UserRole role
 ) {
