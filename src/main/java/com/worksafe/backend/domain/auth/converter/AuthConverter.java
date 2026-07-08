@@ -12,7 +12,7 @@ public final class AuthConverter {
     public static AuthUserResponse toUserResponse(User user) {
         return new AuthUserResponse(
                 user.getId(),
-                user.getUsername(),
+                user.getLoginId(),
                 user.getName(),
                 user.getRole()
         );
@@ -21,14 +21,11 @@ public final class AuthConverter {
     public static AuthTokenResponse toTokenResponse(
             String accessToken,
             String refreshToken,
-            long expiresIn,
             User user
     ) {
         return new AuthTokenResponse(
                 accessToken,
                 refreshToken,
-                "Bearer",
-                expiresIn,
                 toUserResponse(user)
         );
     }

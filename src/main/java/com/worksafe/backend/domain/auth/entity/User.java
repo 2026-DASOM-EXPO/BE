@@ -18,8 +18,8 @@ import lombok.Builder;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String username;
+    @Column(name = "login_id", nullable = false, unique = true, length = 100)
+    private String loginId;
 
     @Column(nullable = false)
     private String password;
@@ -35,8 +35,8 @@ public class User extends BaseEntity {
     private boolean enabled;
 
     @Builder
-    private User(String username, String password, String name, UserRole role, boolean enabled) {
-        this.username = username;
+    private User(String loginId, String password, String name, UserRole role, boolean enabled) {
+        this.loginId = loginId;
         this.password = password;
         this.name = name;
         this.role = role;

@@ -9,7 +9,7 @@ import com.worksafe.backend.domain.auth.dto.response.AuthUserResponse;
 
 public interface AuthService {
 
-    AuthTokenResponse signup(SignupRequest request);
+    AuthUserResponse signup(SignupRequest request);
 
     AuthTokenResponse login(LoginRequest request);
 

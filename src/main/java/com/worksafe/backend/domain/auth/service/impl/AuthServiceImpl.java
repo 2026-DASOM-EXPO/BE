@@ -21,6 +21,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -39,29 +40,33 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProperties jwtProperties;
 
     @Override
-    public AuthTokenResponse signup(SignupRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            throw new BusinessException(ErrorCode.AUTH_DUPLICATED_USERNAME);
+    public AuthUserResponse signup(SignupRequest request) {
+        if (userRepository.existsByLoginId(request.loginId())) {
+            throw new BusinessException(ErrorCode.AUTH_DUPLICATED_LOGIN_ID);
         }
 
         User user = userRepository.save(User.builder()
-                .username(request.username())
+                .loginId(request.loginId())
                 .password(passwordEncoder.encode(request.password()))
                 .name(request.name())
                 .role(request.role() == null ? UserRole.WORKER : request.role())
                 .enabled(true)
                 .build());
 
-        return issueTokens(user);
+        return AuthConverter.toUserResponse(user);
     }
 
     @Override
     public AuthTokenResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.loginId(), request.password())
+            );
+        } catch (AuthenticationException e) {
+            throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS, e);
+        }
 
-        User user = userRepository.findByUsername(request.username())
+        User user = userRepository.findByLoginId(request.loginId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         return issueTokens(user);
@@ -81,9 +86,6 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = stored.getUser();
-        stored.revoke();
-        refreshTokenRepository.save(stored);
-        refreshTokenRepository.deleteByUser_Id(user.getId());
 
         return issueTokens(user);
     }
@@ -109,6 +111,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
 
         refreshTokenRepository.deleteByUser_Id(user.getId());
+        refreshTokenRepository.flush();
         refreshTokenRepository.save(RefreshToken.builder()
                 .user(user)
                 .token(refreshToken)
@@ -119,7 +122,6 @@ public class AuthServiceImpl implements AuthService {
         return AuthConverter.toTokenResponse(
                 accessToken,
                 refreshToken,
-                jwtProperties.getAccessTokenExpirationMs() / 1000,
                 user
         );
     }

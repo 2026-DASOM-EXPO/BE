@@ -7,11 +7,15 @@ import com.worksafe.backend.domain.auth.dto.request.SignupRequest;
 import com.worksafe.backend.domain.auth.dto.response.AuthTokenResponse;
 import com.worksafe.backend.domain.auth.dto.response.AuthUserResponse;
 import com.worksafe.backend.domain.auth.service.AuthService;
+import com.worksafe.backend.global.common.exception.BusinessException;
+import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.global.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -30,8 +34,9 @@ public class AuthController {
 
     @PostMapping("/signup")
     @Operation(summary = "회원가입")
-    public ApiResponse<AuthTokenResponse> signup(@Valid @RequestBody SignupRequest request) {
-        return ApiResponse.created(authService.signup(request));
+    public ResponseEntity<ApiResponse<AuthUserResponse>> signup(@Valid @RequestBody SignupRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created(authService.signup(request)));
     }
 
     @PostMapping("/login")
@@ -67,6 +72,6 @@ public class AuthController {
         if (principal instanceof Long userId) {
             return userId;
         }
-        throw new IllegalStateException("Authenticated principal is missing user id");
+        throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
     }
 }

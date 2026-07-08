@@ -25,9 +25,25 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String[] PUBLIC_AUTH_PATHS = {
+            "/api/auth/login",
+            "/api/auth/signup",
+            "/api/auth/refresh"
+    };
 
     private final JwtTokenProvider jwtTokenProvider;
     private final SecurityErrorResponseWriter securityErrorResponseWriter;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String requestUri = request.getRequestURI();
+        for (String publicPath : PUBLIC_AUTH_PATHS) {
+            if (publicPath.equals(requestUri)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Override
     protected void doFilterInternal(
