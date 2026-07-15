@@ -4,6 +4,7 @@ import com.worksafe.backend.domain.risk.entity.RiskEvent;
 import com.worksafe.backend.domain.risk.enums.RiskLevel;
 import com.worksafe.backend.domain.risk.enums.RiskStatus;
 import com.worksafe.backend.domain.risk.enums.RiskType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -14,6 +15,9 @@ public interface RiskEventRepository extends JpaRepository<RiskEvent, Long> {
     List<RiskEvent> findByWorker_IdOrderByOccurredAtDesc(Long workerId);
 
     List<RiskEvent> findAllByOrderByOccurredAtDesc();
+
+    @EntityGraph(attributePaths = "worker")
+    List<RiskEvent> findTop10ByStatusInOrderByOccurredAtDescIdDesc(Collection<RiskStatus> statuses);
 
     List<RiskEvent> findByWorker_IdAndRiskLevelAndStatusOrderByOccurredAtDesc(Long workerId, RiskLevel riskLevel, RiskStatus status);
 
