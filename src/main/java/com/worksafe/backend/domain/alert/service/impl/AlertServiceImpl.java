@@ -27,12 +27,14 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public List<AlertResponse> findAll() {
-        return AlertConverter.toResponseList(alertRepository.findAllByOrderByCreatedAtDesc());
+        return AlertConverter.toResponseList(alertRepository.findTop30ByOrderByCreatedAtDescIdDesc());
     }
 
     @Override
     public List<AlertResponse> findUnread() {
-        return AlertConverter.toResponseList(alertRepository.findByReadStatusOrderByCreatedAtDesc(AlertReadStatus.UNREAD));
+        return AlertConverter.toResponseList(
+                alertRepository.findTop30ByReadStatusOrderByCreatedAtDescIdDesc(AlertReadStatus.UNREAD)
+        );
     }
 
     @Override

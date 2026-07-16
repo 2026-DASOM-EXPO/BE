@@ -2,6 +2,7 @@ package com.worksafe.backend.domain.alert.repository;
 
 import com.worksafe.backend.domain.alert.entity.Alert;
 import com.worksafe.backend.domain.alert.enums.AlertReadStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,12 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     List<Alert> findAllByOrderByCreatedAtDesc();
 
     List<Alert> findByReadStatusOrderByCreatedAtDesc(AlertReadStatus readStatus);
+
+    @EntityGraph(attributePaths = {"worker", "riskEvent", "riskEvent.worker"})
+    List<Alert> findTop30ByOrderByCreatedAtDescIdDesc();
+
+    @EntityGraph(attributePaths = {"worker", "riskEvent", "riskEvent.worker"})
+    List<Alert> findTop30ByReadStatusOrderByCreatedAtDescIdDesc(AlertReadStatus readStatus);
 
     long countByReadStatus(AlertReadStatus readStatus);
 
