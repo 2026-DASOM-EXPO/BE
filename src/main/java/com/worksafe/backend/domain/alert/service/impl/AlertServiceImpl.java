@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -43,8 +44,11 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public void markAllAsRead() {
-        alertRepository.findByReadStatusOrderByCreatedAtDesc(AlertReadStatus.UNREAD)
-                .forEach(Alert::markAsRead);
+        alertRepository.markAllAsRead(
+                AlertReadStatus.UNREAD,
+                AlertReadStatus.READ,
+                LocalDateTime.now()
+        );
     }
 
     @Override
