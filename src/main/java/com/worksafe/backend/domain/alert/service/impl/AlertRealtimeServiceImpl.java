@@ -30,7 +30,7 @@ public class AlertRealtimeServiceImpl implements AlertRealtimeService {
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError((error) -> emitters.remove(emitter));
         try {
-            emitter.send(SseEmitter.event().name("connected").data(AlertConverter.toResponseList(alertRepository.findByReadStatusOrderByCreatedAtDesc(AlertReadStatus.UNREAD))));
+            emitter.send(SseEmitter.event().name("connected").data(AlertConverter.toResponseList(alertRepository.findTop30ByReadStatusOrderByCreatedAtDescIdDesc(AlertReadStatus.UNREAD))));
         } catch (IOException e) {
             emitters.remove(emitter);
             emitter.completeWithError(e);
