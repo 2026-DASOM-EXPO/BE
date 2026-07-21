@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -26,12 +27,14 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public List<AlertResponse> findAll() {
-        return AlertConverter.toResponseList(alertRepository.findAllByOrderByCreatedAtDesc());
+        return AlertConverter.toResponseList(alertRepository.findTop30ByOrderByCreatedAtDescIdDesc());
     }
 
     @Override
     public List<AlertResponse> findUnread() {
-        return AlertConverter.toResponseList(alertRepository.findByReadStatusOrderByCreatedAtDesc(AlertReadStatus.UNREAD));
+        return AlertConverter.toResponseList(
+                alertRepository.findTop30ByReadStatusOrderByCreatedAtDescIdDesc(AlertReadStatus.UNREAD)
+        );
     }
 
     @Override
@@ -43,8 +46,11 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public void markAllAsRead() {
-        alertRepository.findByReadStatusOrderByCreatedAtDesc(AlertReadStatus.UNREAD)
-                .forEach(Alert::markAsRead);
+        alertRepository.markAllAsRead(
+                AlertReadStatus.UNREAD,
+                AlertReadStatus.READ,
+                LocalDateTime.now()
+        );
     }
 
     @Override
