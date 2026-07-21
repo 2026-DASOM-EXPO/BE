@@ -37,6 +37,11 @@ import java.util.Set;
 @Transactional
 public class DashboardServiceImpl implements DashboardService {
 
+    private static final List<RiskStatus> ACTIVE_RISK_STATUSES = List.of(
+            RiskStatus.OPEN,
+            RiskStatus.PROCESSING
+    );
+
     private final WorkerRepository workerRepository;
     private final EquipmentRepository equipmentRepository;
     private final RiskEventRepository riskEventRepository;
@@ -96,7 +101,9 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public List<RiskEventResponse> recentRiskEvents() {
-        return RiskEventConverter.toResponseList(riskEventRepository.findAllByOrderByOccurredAtDesc());
+        return RiskEventConverter.toResponseList(
+                riskEventRepository.findTop10ByStatusInOrderByOccurredAtDescIdDesc(ACTIVE_RISK_STATUSES)
+        );
     }
 
     @Override
