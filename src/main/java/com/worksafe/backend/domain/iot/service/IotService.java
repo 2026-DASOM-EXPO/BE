@@ -8,7 +8,7 @@ import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
-import com.worksafe.backend.domain.risk.dto.response.RiskEventResponse;
+import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 
 public interface IotService {
@@ -23,7 +23,7 @@ public interface IotService {
 
     SensorLogResponse equipmentStatus(EquipmentStatusRequest request);
 
-    RiskEventResponse sos(SosRequest request);
+    SosResponse sos(SosRequest request);
 
     SensorLogResponse droneObstacle(DroneObstacleRequest request);
 }

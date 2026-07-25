@@ -4,6 +4,8 @@ import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import com.worksafe.backend.domain.risk.enums.RiskLevel;
 import com.worksafe.backend.domain.sensor.enums.SensorType;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 import java.time.LocalDateTime;
 
@@ -27,7 +29,7 @@ public record SensorLogCreateRequest(
         Double latitude,
         Double longitude,
         Double speed,
-        Double pressureValue,
+        @Min(0) @Max(4095) Integer pressureValue,
         Double lidarFrontLeft,
         Double lidarFrontRight,
         Double lidarBackLeft,

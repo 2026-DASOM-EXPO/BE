@@ -48,6 +48,7 @@ public enum ErrorCode {
     INVALID_DRONE_STATUS(HttpStatus.BAD_REQUEST, "INVALID_DRONE_STATUS", "올바르지 않은 드론 상태입니다."),
     INVALID_DRONE_DISPATCH_STATUS(HttpStatus.BAD_REQUEST, "INVALID_DRONE_DISPATCH_STATUS", "올바르지 않은 드론 배차 상태입니다."),
     INVALID_EQUIPMENT_WEAR_STATUS(HttpStatus.BAD_REQUEST, "INVALID_EQUIPMENT_WEAR_STATUS", "올바르지 않은 착용 상태입니다."),
+    INVALID_SENSOR_EQUIPMENT_TYPE(HttpStatus.BAD_REQUEST, "INVALID_SENSOR_EQUIPMENT_TYPE", "센서 유형과 장비 유형이 일치하지 않습니다."),
 
     ALREADY_CHECKED_IN(HttpStatus.CONFLICT, "ALREADY_CHECKED_IN", "이미 출근 처리된 작업자입니다."),
     ALREADY_CHECKED_OUT(HttpStatus.CONFLICT, "ALREADY_CHECKED_OUT", "이미 퇴근 처리된 작업자입니다."),

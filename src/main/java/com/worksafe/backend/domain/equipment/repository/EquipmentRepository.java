@@ -2,6 +2,7 @@ package com.worksafe.backend.domain.equipment.repository;
 
 import com.worksafe.backend.domain.equipment.entity.Equipment;
 import com.worksafe.backend.domain.equipment.enums.EquipmentStatus;
+import com.worksafe.backend.domain.equipment.enums.EquipmentType;
 import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -15,6 +16,8 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Long> {
     List<Equipment> findByWorker_IdOrderByUpdatedAtDesc(Long workerId);
 
     Optional<Equipment> findFirstByWorker_IdOrderByUpdatedAtDesc(Long workerId);
+
+    Optional<Equipment> findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(Long workerId, EquipmentType type);
 
     List<Equipment> findAllByOrderByCreatedAtDesc();
 
