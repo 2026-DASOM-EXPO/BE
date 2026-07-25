@@ -7,6 +7,9 @@ import com.worksafe.backend.domain.drone.dto.response.DroneVideoResponse;
 import com.worksafe.backend.domain.drone.converter.DroneConverter;
 import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
+import com.worksafe.backend.domain.drone.entity.DroneVideo;
+import com.worksafe.backend.domain.drone.enums.StreamStatus;
+import com.worksafe.backend.domain.drone.enums.VideoProtocol;
 import com.worksafe.backend.domain.risk.converter.RiskEventConverter;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventCreateRequest;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventStatusUpdateRequest;
@@ -23,6 +26,7 @@ import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +41,9 @@ public class RiskServiceImpl implements RiskService {
     private final RiskEvaluationService riskEvaluationService;
     private final DroneDispatchRepository droneDispatchRepository;
     private final DroneVideoRepository droneVideoRepository;
+
+    @Value("${app.drone.stream-base-url:http://localhost:8888}")
+    private String streamBaseUrl;
 
     @Override
     public RiskEventResponse create(RiskEventCreateRequest request) {
@@ -60,6 +67,9 @@ public class RiskServiceImpl implements RiskService {
     public RiskEventResponse updateStatus(Long riskEventId, RiskEventStatusUpdateRequest request) {
         RiskEvent riskEvent = getRiskEvent(riskEventId);
         riskEvent.changeStatus(request.status());
+        if (request.status() == RiskStatus.PROCESSING && riskEvent.getRiskType() == com.worksafe.backend.domain.risk.enums.RiskType.SOS_REQUEST) {
+            startSosVideo(riskEvent);
+        }
         if (riskEvent.getWorker() != null) {
             riskEvaluationService.evaluateWorkerRisk(riskEvent.getWorker().getId());
         }
@@ -97,6 +107,31 @@ public class RiskServiceImpl implements RiskService {
     private RiskEvent getRiskEvent(Long riskEventId) {
         return riskEventRepository.findById(riskEventId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RISK_EVENT_NOT_FOUND));
+    }
+
+    private void startSosVideo(RiskEvent riskEvent) {
+        var dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.getId());
+        if (dispatch == null) {
+            throw new BusinessException(ErrorCode.DRONE_DISPATCH_NOT_FOUND);
+        }
+        DroneVideo video = droneVideoRepository.findFirstByDispatch_IdOrderByCreatedAtDesc(dispatch.getId())
+                .orElseGet(() -> droneVideoRepository.save(DroneVideo.builder()
+                        .drone(dispatch.getDrone())
+                        .dispatch(dispatch)
+                        .title("SOS 현장 영상")
+                        .description("관리자 확인 후 시작된 720p 현장 영상")
+                        .streamUrl(streamBaseUrl.replaceAll("/$", "")
+                                + "/" + dispatch.getDrone().getSerialNumber() + "/index.m3u8")
+                        .protocol(VideoProtocol.HLS)
+                        .active(false)
+                        .streamStatus(StreamStatus.READY)
+                        .width(1280)
+                        .height(720)
+                        .frameRate(30)
+                        .build()));
+        if (!video.isActive()) {
+            video.start();
+        }
     }
 
     private Worker resolveWorker(Long workerId) {
