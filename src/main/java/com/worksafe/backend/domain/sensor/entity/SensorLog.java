@@ -55,7 +55,7 @@ public class SensorLog extends BaseEntity {
     private Double latitude;
     private Double longitude;
     private Double speed;
-    private Double pressureValue;
+    private Integer pressureValue;
     private Double lidarFrontLeft;
     private Double lidarFrontRight;
     private Double lidarBackLeft;
@@ -100,7 +100,7 @@ public class SensorLog extends BaseEntity {
             Double latitude,
             Double longitude,
             Double speed,
-            Double pressureValue,
+            Integer pressureValue,
             Double lidarFrontLeft,
             Double lidarFrontRight,
             Double lidarBackLeft,
@@ -146,5 +146,10 @@ public class SensorLog extends BaseEntity {
         this.sosPressed = sosPressed;
         this.riskLevel = riskLevel;
         this.measuredAt = measuredAt;
+    }
+
+    public void applyAssessment(WearStatus wearStatus, RiskLevel riskLevel) {
+        this.wearStatus = wearStatus;
+        this.riskLevel = riskLevel;
     }
 }

@@ -9,6 +9,8 @@ spring:
       ddl-auto: create-drop
     show-sql: false
     open-in-view: false
+  flyway:
+    enabled: false
 
 jwt:
   secret: change-this-secret-key-must-be-long-enough-for-hs256

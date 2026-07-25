@@ -17,6 +17,7 @@ import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
 import com.worksafe.backend.domain.equipment.entity.WearableCommand;
 import com.worksafe.backend.domain.equipment.enums.WearStatus;
+import com.worksafe.backend.domain.equipment.enums.EquipmentType;
 import com.worksafe.backend.domain.equipment.enums.WearableCommandStatus;
 import com.worksafe.backend.domain.equipment.enums.WearableCommandType;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
@@ -45,6 +46,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +54,8 @@ import java.util.Locale;
 public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private static final List<RiskStatus> ACTIVE_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
+    private static final Set<EquipmentType> REQUIRED_EQUIPMENT_TYPES =
+            Set.of(EquipmentType.HELMET, EquipmentType.VEST, EquipmentType.SHOES);
 
     private final RiskEventRepository riskEventRepository;
     private final SensorLogRepository sensorLogRepository;
@@ -78,7 +82,11 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             riskLevel = max(riskLevel, evaluateMotionRiskLevel(motionLog));
         }
 
-        riskLevel = max(riskLevel, evaluateEquipmentRiskLevel(workerId));
+        RiskLevel equipmentRiskLevel = evaluateEquipmentRiskLevel(workerId);
+        if (equipmentRiskLevel == RiskLevel.LV1) {
+            resolveEquipmentRiskIfRecovered(worker);
+        }
+        riskLevel = max(riskLevel, equipmentRiskLevel);
         for (RiskEvent activeRiskEvent : riskEventRepository.findByWorker_IdAndStatusInOrderByOccurredAtDesc(workerId, ACTIVE_STATUSES)) {
             riskLevel = max(riskLevel, activeRiskEvent.getRiskLevel());
         }
@@ -127,6 +135,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         Worker worker = getWorker(workerId);
         RiskLevel riskLevel = evaluateEquipmentRiskLevel(workerId);
         if (riskLevel == RiskLevel.LV1) {
+            resolveEquipmentRiskIfRecovered(worker);
             updateWorkerStatus(worker, riskLevel);
             return null;
         }
@@ -163,7 +172,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 .worker(worker)
                 .sourceType(RiskSourceType.SOS)
                 .riskType(RiskType.SOS_REQUEST)
-                .riskLevel(RiskLevel.LV4)
+                .riskLevel(RiskLevel.LV3)
                 .description("SOS request detected.")
                 .latitude(worker.getCurrentLatitude())
                 .longitude(worker.getCurrentLongitude())
@@ -177,8 +186,12 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     @Override
     public void handleRiskEvent(RiskEvent riskEvent) {
         createAlertIfNeeded(riskEvent);
-        createBuzzerCommandIfNeeded(riskEvent);
-        dispatchDroneIfNeeded(riskEvent);
+        if (riskEvent.getRiskType() == RiskType.NO_EQUIPMENT) {
+            createBuzzerCommandIfNeeded(riskEvent);
+        }
+        if (riskEvent.getRiskType() == RiskType.SOS_REQUEST) {
+            dispatchDroneIfNeeded(riskEvent);
+        }
         updateWorkerStatus(riskEvent.getWorker(), riskEvent.getRiskLevel());
     }
 
@@ -187,7 +200,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             case BIOMETRIC -> evaluateBiometricRiskLevel(sensorLog);
             case MOTION -> evaluateMotionRiskLevel(sensorLog);
             case WEAR_STATUS -> sensorLog.getWearStatus() == WearStatus.NOT_WORN ? RiskLevel.LV2 : RiskLevel.LV1;
-            case SOS -> RiskLevel.LV4;
+            case SOS -> RiskLevel.LV3;
             default -> RiskLevel.LV1;
         };
     }
@@ -257,21 +270,10 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private RiskLevel evaluateEquipmentRiskLevel(Long workerId) {
         List<Equipment> equipmentList = equipmentRepository.findByWorker_IdOrderByUpdatedAtDesc(workerId);
-        if (equipmentList.isEmpty()) {
-            return RiskLevel.LV1;
-        }
-
-        boolean anyNotWorn = equipmentList.stream().anyMatch(equipment -> equipment.getWearStatus() == WearStatus.NOT_WORN);
-        boolean allNotWornOrUnknown = equipmentList.stream().allMatch(equipment ->
-                equipment.getWearStatus() == WearStatus.NOT_WORN || equipment.getWearStatus() == WearStatus.UNKNOWN);
-
-        if (allNotWornOrUnknown && anyNotWorn) {
-            return RiskLevel.LV3;
-        }
-        if (anyNotWorn) {
-            return RiskLevel.LV2;
-        }
-        return RiskLevel.LV1;
+        boolean allRequiredEquipmentWorn = REQUIRED_EQUIPMENT_TYPES.stream().allMatch(requiredType ->
+                equipmentList.stream().anyMatch(equipment ->
+                        equipment.getType() == requiredType && equipment.getWearStatus() == WearStatus.WORN));
+        return allRequiredEquipmentWorn ? RiskLevel.LV1 : RiskLevel.LV2;
     }
 
     private void createAlertIfNeeded(RiskEvent riskEvent) {
@@ -295,7 +297,11 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             return;
         }
 
-        Equipment equipment = equipmentRepository.findFirstByWorker_IdOrderByUpdatedAtDesc(riskEvent.getWorker().getId()).orElse(null);
+        Equipment equipment = equipmentRepository
+                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(riskEvent.getWorker().getId(), EquipmentType.VEST)
+                .orElseGet(() -> equipmentRepository
+                        .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(riskEvent.getWorker().getId(), EquipmentType.SOS_BUTTON)
+                        .orElse(null));
         if (equipment == null) {
             return;
         }
@@ -311,7 +317,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     }
 
     private void dispatchDroneIfNeeded(RiskEvent riskEvent) {
-        if (riskEvent.getRiskLevel().ordinal() < RiskLevel.LV3.ordinal()) {
+        if (riskEvent.getRiskType() != RiskType.SOS_REQUEST) {
             return;
         }
 
@@ -338,18 +344,41 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 .emergencyKitMounted(true)
                 .emergencyKitDropped(false)
                 .dropMethod(DropMethod.MANUAL)
-                .emergencyCallRequested(riskEvent.getRiskLevel() == RiskLevel.LV4 || riskEvent.getSourceType() == RiskSourceType.SOS)
-                .emergencyCallStatus(riskEvent.getRiskLevel() == RiskLevel.LV4 || riskEvent.getSourceType() == RiskSourceType.SOS
-                        ? EmergencyCallStatus.REQUESTED
-                        : EmergencyCallStatus.NOT_REQUESTED)
+                .emergencyCallRequested(false)
+                .emergencyCallStatus(EmergencyCallStatus.NOT_REQUESTED)
                 .status(DroneDispatchStatus.DISPATCHED)
                 .commandMessage(riskEvent.getDescription())
                 .dispatchedAt(LocalDateTime.now())
                 .build());
 
         drone.changeStatus(DroneStatus.FLYING);
-        if (dispatch.isEmergencyCallRequested()) {
-            dispatch.markEmergencyCallRequested();
+    }
+
+    private void resolveEquipmentRiskIfRecovered(Worker worker) {
+        List<RiskEvent> activeEquipmentRisks = riskEventRepository
+                .findByWorker_IdAndStatusInOrderByOccurredAtDesc(worker.getId(), ACTIVE_STATUSES)
+                .stream()
+                .filter(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
+                .toList();
+        if (activeEquipmentRisks.isEmpty()) {
+            return;
+        }
+        activeEquipmentRisks.forEach(event -> event.changeStatus(RiskStatus.RESOLVED));
+
+        Equipment vest = equipmentRepository
+                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.VEST)
+                .orElseGet(() -> equipmentRepository
+                        .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.SOS_BUTTON)
+                        .orElse(null));
+        if (vest != null) {
+            wearableCommandRepository.save(WearableCommand.builder()
+                    .equipment(vest)
+                    .worker(worker)
+                    .commandType(WearableCommandType.BUZZER_OFF)
+                    .commandStatus(WearableCommandStatus.REQUESTED)
+                    .reason("필수 안전장비가 모두 다시 착용되었습니다.")
+                    .requestedAt(LocalDateTime.now())
+                    .build());
         }
     }
 

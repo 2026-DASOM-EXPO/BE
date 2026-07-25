@@ -68,7 +68,7 @@ public class SensorLogServiceImpl implements SensorLogService {
                     worker.getId(),
                     RiskSourceType.SOS,
                     RiskType.SOS_REQUEST,
-                    RiskLevel.LV4,
+                    RiskLevel.LV3,
                     "SOS 버튼이 눌렸습니다.",
                     request.latitude(),
                     request.longitude(),
@@ -90,7 +90,7 @@ public class SensorLogServiceImpl implements SensorLogService {
                     worker.getDepartment(),
                     worker.getPhoneNumber(),
                     worker.getRfidTag(),
-                    request.riskLevel() == RiskLevel.LV4 ? WorkerStatus.DANGER : WorkerStatus.WARNING,
+                    request.riskLevel().ordinal() >= RiskLevel.LV3.ordinal() ? WorkerStatus.DANGER : WorkerStatus.WARNING,
                     worker.getCurrentLatitude(),
                     worker.getCurrentLongitude()
             );

@@ -7,11 +7,15 @@ import com.worksafe.backend.domain.alert.enums.AlertSeverity;
 import com.worksafe.backend.domain.alert.repository.AlertRepository;
 import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import com.worksafe.backend.domain.drone.entity.DroneDispatch;
+import com.worksafe.backend.domain.drone.converter.DroneConverter;
+import com.worksafe.backend.domain.drone.dto.response.DroneDispatchResponse;
 import com.worksafe.backend.domain.drone.enums.DroneDispatchStatus;
 import com.worksafe.backend.domain.drone.enums.DroneStatus;
 import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
+import com.worksafe.backend.domain.equipment.enums.EquipmentType;
+import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import com.worksafe.backend.domain.equipment.enums.AttendanceType;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
@@ -24,9 +28,12 @@ import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
+import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventCreateRequest;
 import com.worksafe.backend.domain.risk.dto.response.RiskEventResponse;
+import com.worksafe.backend.domain.risk.converter.RiskEventConverter;
+import com.worksafe.backend.domain.risk.entity.RiskEvent;
 import com.worksafe.backend.domain.risk.enums.RiskLevel;
 import com.worksafe.backend.domain.risk.enums.RiskSourceType;
 import com.worksafe.backend.domain.risk.enums.RiskStatus;
@@ -45,6 +52,7 @@ import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -66,6 +74,9 @@ public class IotServiceImpl implements IotService {
     private final DroneRepository droneRepository;
     private final AlertRepository alertRepository;
     private final AlertRealtimeService alertRealtimeService;
+
+    @Value("${app.sensor.fsr-worn-threshold:1000}")
+    private int fsrWornThreshold;
 
     @Override
     public AttendanceResponse attendance(AttendanceRequest request) {
@@ -155,32 +166,37 @@ public class IotServiceImpl implements IotService {
         Worker worker = getWorker(request.workerId());
         Equipment equipment = getEquipment(request.equipmentId());
         ensureEquipmentMatchesWorker(worker, equipment);
-
-        if (equipment.getWearStatus() == request.wearStatus()) {
-            throw new BusinessException(ErrorCode.INVALID_STATE_TRANSITION);
+        if (equipment.getType() != EquipmentType.HELMET && equipment.getType() != EquipmentType.SHOES) {
+            throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
-        equipment.updateWearStatus(request.wearStatus(), request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt());
+        WearStatus detectedWearStatus = request.pressureValue() >= fsrWornThreshold
+                ? WearStatus.WORN
+                : WearStatus.NOT_WORN;
+        equipment.updateWearStatus(detectedWearStatus, request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt());
 
         SensorLog saved = sensorLogRepository.save(buildSensorLog(
                 worker,
                 equipment,
-                request
+                request,
+                detectedWearStatus
         ));
 
         riskEvaluationService.evaluateByEquipmentStatus(worker.getId());
-        riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        saved.applyAssessment(detectedWearStatus, riskLevel);
         return SensorLogConverter.toResponse(saved);
     }
 
     @Override
-    public RiskEventResponse sos(SosRequest request) {
+    public SosResponse sos(SosRequest request) {
         Worker worker = getWorker(request.workerId());
         Equipment equipment = getEquipmentIfPresent(request.equipmentId());
         ensureEquipmentMatchesWorker(worker, equipment);
-
-        if (riskEventRepository.existsByWorker_IdAndRiskTypeAndStatusIn(worker.getId(), RiskType.SOS_REQUEST, ACTIVE_RISK_STATUSES)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_SOS_REQUEST);
+        if (equipment != null
+                && equipment.getType() != EquipmentType.VEST
+                && equipment.getType() != EquipmentType.SOS_BUTTON) {
+            throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
         sensorLogRepository.save(buildSensorLog(
@@ -189,16 +205,47 @@ public class IotServiceImpl implements IotService {
                 request
         ));
 
-        return riskService.create(new RiskEventCreateRequest(
+        if (request.buttonValue() == 0) {
+            return new SosResponse(0, false, null, null, false, false);
+        }
+
+        RiskEvent existing = riskEventRepository.findFirstByWorker_IdAndRiskTypeAndStatusInOrderByOccurredAtDesc(
+                worker.getId(),
+                RiskType.SOS_REQUEST,
+                ACTIVE_RISK_STATUSES
+        );
+        if (existing != null) {
+            DroneDispatch existingDispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(existing.getId());
+            DroneDispatchResponse dispatchResponse = existingDispatch == null ? null : DroneConverter.toDispatchResponse(existingDispatch);
+            return new SosResponse(
+                    1,
+                    false,
+                    RiskEventConverter.toResponse(existing),
+                    dispatchResponse,
+                    true,
+                    existingDispatch != null && existingDispatch.isEmergencyCallRequested()
+            );
+        }
+
+        RiskEventResponse riskEvent = riskService.create(new RiskEventCreateRequest(
                 worker.getId(),
                 RiskSourceType.SOS,
                 RiskType.SOS_REQUEST,
-                RiskLevel.LV4,
+                RiskLevel.LV3,
                 request.message(),
                 request.latitude(),
                 request.longitude(),
                 request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt()
         ));
+        DroneDispatch dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.id());
+        return new SosResponse(
+                1,
+                true,
+                riskEvent,
+                dispatch == null ? null : DroneConverter.toDispatchResponse(dispatch),
+                true,
+                dispatch != null && dispatch.isEmergencyCallRequested()
+        );
     }
 
     @Override
@@ -320,12 +367,18 @@ public class IotServiceImpl implements IotService {
                 .build();
     }
 
-    private SensorLog buildSensorLog(Worker worker, Equipment equipment, EquipmentStatusRequest request) {
+    private SensorLog buildSensorLog(
+            Worker worker,
+            Equipment equipment,
+            EquipmentStatusRequest request,
+            WearStatus detectedWearStatus
+    ) {
         return SensorLog.builder()
                 .worker(worker)
                 .equipment(equipment)
                 .sensorType(SensorType.WEAR_STATUS)
                 .pressureValue(request.pressureValue())
+                .wearStatus(detectedWearStatus)
                 .sosPressed(false)
                 .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
                 .build();
@@ -339,7 +392,7 @@ public class IotServiceImpl implements IotService {
                 .latitude(request.latitude())
                 .longitude(request.longitude())
                 .rawPayload(request.message())
-                .sosPressed(true)
+                .sosPressed(request.buttonValue() == 1)
                 .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
                 .build();
     }

@@ -8,8 +8,8 @@ import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
+import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
-import com.worksafe.backend.domain.risk.dto.response.RiskEventResponse;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 import com.worksafe.backend.global.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 
 @Tag(name = "IoT 수집 API", description = "RFID 출입 인증, 생체 데이터, IMU, GPS, 안전장비, SOS, 드론 장애물 센서 수집")
 @RestController
@@ -54,14 +56,16 @@ public class IotController {
     }
 
     @PostMapping("/equipment-status")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "안전장비 착용 상태 변경")
     public ApiResponse<SensorLogResponse> equipmentStatus(@Valid @RequestBody EquipmentStatusRequest request) {
         return ApiResponse.created(iotService.equipmentStatus(request));
     }
 
     @PostMapping("/sos")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "SOS 긴급 신고")
-    public ApiResponse<RiskEventResponse> sos(@Valid @RequestBody SosRequest request) {
+    public ApiResponse<SosResponse> sos(@Valid @RequestBody SosRequest request) {
         return ApiResponse.created(iotService.sos(request));
     }
 

@@ -55,6 +55,9 @@ public class DroneVideo extends BaseEntity {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
     private LocalDateTime lastFrameAt;
+    private Integer width;
+    private Integer height;
+    private Integer frameRate;
 
     @Builder
     private DroneVideo(
@@ -66,6 +69,9 @@ public class DroneVideo extends BaseEntity {
             VideoProtocol protocol,
             boolean active,
             StreamStatus streamStatus,
+            Integer width,
+            Integer height,
+            Integer frameRate,
             LocalDateTime startedAt,
             LocalDateTime endedAt,
             LocalDateTime lastFrameAt
@@ -78,6 +84,9 @@ public class DroneVideo extends BaseEntity {
         this.protocol = protocol;
         this.active = active;
         this.streamStatus = streamStatus == null ? StreamStatus.READY : streamStatus;
+        this.width = width == null ? 1280 : width;
+        this.height = height == null ? 720 : height;
+        this.frameRate = frameRate == null ? 30 : frameRate;
         this.startedAt = startedAt;
         this.endedAt = endedAt;
         this.lastFrameAt = lastFrameAt;

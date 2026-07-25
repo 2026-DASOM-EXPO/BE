@@ -29,7 +29,7 @@ public record SensorLogResponse(
         Double latitude,
         Double longitude,
         Double speed,
-        Double pressureValue,
+        Integer pressureValue,
         Double lidarFrontLeft,
         Double lidarFrontRight,
         Double lidarBackLeft,

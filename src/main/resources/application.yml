@@ -14,7 +14,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     open-in-view: false
     properties:
@@ -27,6 +27,10 @@ server:
       enabled: false
 
 app:
+  sensor:
+    fsr-worn-threshold: ${FSR_WORN_THRESHOLD:1000}
+  drone:
+    stream-base-url: ${DRONE_STREAM_BASE_URL:http://localhost:8888}
   cors:
     allowed-origins:
       - http://localhost:3000

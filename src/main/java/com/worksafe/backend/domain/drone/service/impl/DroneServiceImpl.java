@@ -150,6 +150,9 @@ public class DroneServiceImpl implements DroneService {
                 .protocol(request.protocol())
                 .active(false)
                 .streamStatus(StreamStatus.READY)
+                .width(request.width())
+                .height(request.height())
+                .frameRate(request.frameRate())
                 .build());
 
         return DroneConverter.toVideoResponse(video);
