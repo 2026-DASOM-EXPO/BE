@@ -27,9 +27,6 @@ public class Worker extends BaseEntity {
     @Column(nullable = false, length = 50)
     private String phoneNumber;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String rfidTag;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private WorkerStatus status;
@@ -42,7 +39,6 @@ public class Worker extends BaseEntity {
             String name,
             String department,
             String phoneNumber,
-            String rfidTag,
             WorkerStatus status,
             Double currentLatitude,
             Double currentLongitude
@@ -50,7 +46,6 @@ public class Worker extends BaseEntity {
         this.name = name;
         this.department = department;
         this.phoneNumber = phoneNumber;
-        this.rfidTag = rfidTag;
         this.status = status == null ? WorkerStatus.NORMAL : status;
         this.currentLatitude = currentLatitude;
         this.currentLongitude = currentLongitude;
@@ -60,7 +55,6 @@ public class Worker extends BaseEntity {
             String name,
             String department,
             String phoneNumber,
-            String rfidTag,
             WorkerStatus status,
             Double currentLatitude,
             Double currentLongitude
@@ -73,9 +67,6 @@ public class Worker extends BaseEntity {
         }
         if (phoneNumber != null) {
             this.phoneNumber = phoneNumber;
-        }
-        if (rfidTag != null) {
-            this.rfidTag = rfidTag;
         }
         if (status != null) {
             this.status = status;

@@ -9,11 +9,13 @@ import com.worksafe.backend.domain.worker.dto.response.WorkerResponse;
 import com.worksafe.backend.domain.worker.entity.Worker;
 import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import com.worksafe.backend.domain.worker.service.WorkerService;
+import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -21,11 +23,15 @@ import java.util.List;
 public class WorkerServiceImpl implements WorkerService {
 
     private final WorkerRepository workerRepository;
+    private final AlertRealtimeService alertRealtimeService;
 
     @Override
     public WorkerResponse create(WorkerCreateRequest request) {
         Worker worker = WorkerConverter.toEntity(request);
-        return WorkerConverter.toResponse(workerRepository.save(worker));
+        Worker saved = workerRepository.save(worker);
+        WorkerResponse response = WorkerConverter.toResponse(saved);
+        alertRealtimeService.publish("worker", response);
+        return response;
     }
 
     @Override
@@ -45,25 +51,29 @@ public class WorkerServiceImpl implements WorkerService {
                 request.name(),
                 request.department(),
                 request.phoneNumber(),
-                request.rfidTag(),
                 request.status(),
                 request.currentLatitude(),
                 request.currentLongitude()
         );
-        return WorkerConverter.toResponse(worker);
+        WorkerResponse response = WorkerConverter.toResponse(worker);
+        alertRealtimeService.publish("worker", response);
+        return response;
     }
 
     @Override
     public void delete(Long workerId) {
         Worker worker = getWorker(workerId);
         workerRepository.delete(worker);
+        alertRealtimeService.publish("worker-deleted", Map.of("id", workerId));
     }
 
     @Override
     public WorkerResponse updateLocation(Long workerId, Double latitude, Double longitude) {
         Worker worker = getWorker(workerId);
         worker.updateLocation(latitude, longitude);
-        return WorkerConverter.toResponse(worker);
+        WorkerResponse response = WorkerConverter.toResponse(worker);
+        alertRealtimeService.publish("worker", response);
+        return response;
     }
 
     private Worker getWorker(Long workerId) {
