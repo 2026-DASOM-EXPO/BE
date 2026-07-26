@@ -1,5 +1,15 @@
 # WORKSAE BE
 
+## Docker 실행 및 SIYI 영상
+
+```powershell
+docker compose up --build
+```
+
+Docker 이미지에 FFmpeg가 포함되며 PostgreSQL과 BE가 함께 실행됩니다. SIYI A8 Mini 실제 RTSP 연결,
+관리자 확인 후 720p HLS 송출, 카메라 없는 테스트 영상 실행 방법은
+[docs/SIYI_A8_STREAMING.md](docs/SIYI_A8_STREAMING.md)를 참고하세요.
+
 ---
 
 ## Git Branch 전략
