@@ -1,7 +1,6 @@
 package com.worksafe.backend.domain.sensor.enums;
 
 public enum SensorType {
-    RFID,
     BIOMETRIC,
     MOTION,
     GPS,

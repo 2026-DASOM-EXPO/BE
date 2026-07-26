@@ -16,3 +16,8 @@ jwt:
   secret: change-this-secret-key-must-be-long-enough-for-hs256
   access-token-expiration: 1800000
   refresh-token-expiration: 1209600000
+
+app:
+  drone:
+    streaming:
+      enabled: false

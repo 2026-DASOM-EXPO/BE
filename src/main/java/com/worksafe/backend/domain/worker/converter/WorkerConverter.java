@@ -16,7 +16,6 @@ public final class WorkerConverter {
                 .name(request.name())
                 .department(request.department())
                 .phoneNumber(request.phoneNumber())
-                .rfidTag(request.rfidTag())
                 .status(request.status())
                 .currentLatitude(request.currentLatitude())
                 .currentLongitude(request.currentLongitude())
@@ -29,7 +28,6 @@ public final class WorkerConverter {
                 worker.getName(),
                 worker.getDepartment(),
                 worker.getPhoneNumber(),
-                worker.getRfidTag(),
                 worker.getStatus(),
                 worker.getCurrentLatitude(),
                 worker.getCurrentLongitude(),

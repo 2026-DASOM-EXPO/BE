@@ -89,7 +89,6 @@ public class SensorLogServiceImpl implements SensorLogService {
                     worker.getName(),
                     worker.getDepartment(),
                     worker.getPhoneNumber(),
-                    worker.getRfidTag(),
                     request.riskLevel().ordinal() >= RiskLevel.LV3.ordinal() ? WorkerStatus.DANGER : WorkerStatus.WARNING,
                     worker.getCurrentLatitude(),
                     worker.getCurrentLongitude()

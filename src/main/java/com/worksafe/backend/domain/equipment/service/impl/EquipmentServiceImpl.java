@@ -21,6 +21,7 @@ import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.domain.equipment.repository.EquipmentLogRepository;
 import com.worksafe.backend.domain.equipment.repository.WearableCommandRepository;
 import com.worksafe.backend.domain.equipment.service.EquipmentService;
+import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.worker.entity.Worker;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,12 +44,15 @@ public class EquipmentServiceImpl implements EquipmentService {
     private final EquipmentLogRepository equipmentLogRepository;
     private final WorkerRepository workerRepository;
     private final WearableCommandRepository wearableCommandRepository;
+    private final AlertRealtimeService alertRealtimeService;
 
     @Override
     public EquipmentResponse create(EquipmentCreateRequest request) {
         Worker worker = request.workerId() == null ? null : getWorker(request.workerId());
         Equipment equipment = EquipmentConverter.toEntity(request, worker);
-        return EquipmentConverter.toResponse(equipmentRepository.save(equipment));
+        Equipment saved = equipmentRepository.save(equipment);
+        publish(saved);
+        return EquipmentConverter.toResponse(saved);
     }
 
     @Override
@@ -71,12 +76,14 @@ public class EquipmentServiceImpl implements EquipmentService {
                 request.wearStatus(),
                 equipment.getLastDetectedAt()
         );
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
     @Override
     public void delete(Long equipmentId) {
         equipmentRepository.delete(getEquipment(equipmentId));
+        alertRealtimeService.publish("equipment-deleted", Map.of("id", equipmentId));
     }
 
     @Override
@@ -91,6 +98,7 @@ public class EquipmentServiceImpl implements EquipmentService {
                 .wearStatus(equipment.getWearStatus())
                 .issuedAt(LocalDateTime.now())
                 .build());
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -101,6 +109,7 @@ public class EquipmentServiceImpl implements EquipmentService {
         if (request.wearStatus() == WearStatus.NOT_WORN) {
             closeOpenLog(equipment, LocalDateTime.now());
         }
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -108,6 +117,7 @@ public class EquipmentServiceImpl implements EquipmentService {
     public EquipmentResponse updateManualWearStatus(Long equipmentId, ManualWearStatusRequest request) {
         Equipment equipment = getEquipment(equipmentId);
         equipment.setManualWearStatus(request.wearStatus());
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -123,6 +133,7 @@ public class EquipmentServiceImpl implements EquipmentService {
                     request.reason()
             );
         }
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -133,6 +144,7 @@ public class EquipmentServiceImpl implements EquipmentService {
         if (equipment.getWorker() != null) {
             createWearableCommand(equipment, equipment.getWorker(), WearableCommandType.TIMER_START, request.reason());
         }
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -143,6 +155,7 @@ public class EquipmentServiceImpl implements EquipmentService {
         if (equipment.getWorker() != null) {
             createWearableCommand(equipment, equipment.getWorker(), WearableCommandType.TIMER_STOP, request.reason());
         }
+        publish(equipment);
         return EquipmentConverter.toResponse(equipment);
     }
 
@@ -197,5 +210,9 @@ public class EquipmentServiceImpl implements EquipmentService {
                 .ifPresent(log -> {
                     log.markReturned(returnedAt);
                 });
+    }
+
+    private void publish(Equipment equipment) {
+        alertRealtimeService.publish("equipment", EquipmentConverter.toResponse(equipment));
     }
 }

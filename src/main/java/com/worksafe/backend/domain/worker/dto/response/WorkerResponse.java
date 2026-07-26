@@ -9,7 +9,6 @@ public record WorkerResponse(
         String name,
         String department,
         String phoneNumber,
-        String rfidTag,
         WorkerStatus status,
         Double currentLatitude,
         Double currentLongitude,

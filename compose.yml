@@ -1,0 +1,53 @@
+name: worksafe
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: expo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d expo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/expo
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      JWT_SECRET: ${JWT_SECRET:-docker-local-jwt-secret-key-must-be-at-least-32-bytes}
+      FFMPEG_PATH: ffmpeg
+      DRONE_STREAM_ENABLED: "true"
+      DRONE_RTSP_URL_TEMPLATE: ${DRONE_RTSP_URL_TEMPLATE:-rtsp://192.168.144.25:8554/main.264}
+      DRONE_STREAM_OUTPUT_DIR: /app/build/hls
+      DRONE_STREAM_PUBLIC_BASE_URL: ${DRONE_STREAM_PUBLIC_BASE_URL:-http://localhost:8080/streams}
+      DRONE_STREAM_STARTUP_TIMEOUT: ${DRONE_STREAM_STARTUP_TIMEOUT:-20}
+      DRONE_STREAM_WIDTH: ${DRONE_STREAM_WIDTH:-1280}
+      DRONE_STREAM_HEIGHT: ${DRONE_STREAM_HEIGHT:-720}
+      DRONE_STREAM_FRAME_RATE: ${DRONE_STREAM_FRAME_RATE:-30}
+      DRONE_STREAM_SEGMENT_SECONDS: ${DRONE_STREAM_SEGMENT_SECONDS:-1}
+      DRONE_STREAM_PLAYLIST_SIZE: ${DRONE_STREAM_PLAYLIST_SIZE:-6}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - drone-hls:/app/build/hls
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  drone-hls:

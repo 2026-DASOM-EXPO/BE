@@ -7,7 +7,6 @@ public record WorkerUpdateRequest(
         @Size(max = 100) String name,
         @Size(max = 100) String department,
         @Size(max = 50) String phoneNumber,
-        @Size(max = 100) String rfidTag,
         WorkerStatus status,
         Double currentLatitude,
         Double currentLongitude

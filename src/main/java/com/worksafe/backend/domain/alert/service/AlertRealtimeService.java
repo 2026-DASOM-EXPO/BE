@@ -8,4 +8,6 @@ public interface AlertRealtimeService {
     SseEmitter register();
 
     void publish(AlertResponse alertResponse);
+
+    void publish(String eventName, Object payload);
 }

@@ -202,7 +202,6 @@ class AlertControllerIntegrationTest {
                 .name("worker-" + key)
                 .department("safety")
                 .phoneNumber("010-" + key)
-                .rfidTag("rfid-" + key)
                 .status(WorkerStatus.NORMAL)
                 .build());
     }

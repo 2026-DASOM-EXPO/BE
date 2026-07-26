@@ -1,13 +1,11 @@
 package com.worksafe.backend.domain.iot.controller;
 
-import com.worksafe.backend.domain.iot.dto.request.AttendanceRequest;
 import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
 import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
-import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
@@ -23,19 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.http.HttpStatus;
 
-@Tag(name = "IoT 수집 API", description = "RFID 출입 인증, 생체 데이터, IMU, GPS, 안전장비, SOS, 드론 장애물 센서 수집")
+@Tag(name = "IoT 수집 API", description = "생체 데이터, IMU, GPS, 안전장비, SOS, 드론 장애물 센서 수집")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/iot")
 public class IotController {
 
     private final IotService iotService;
-
-    @PostMapping("/attendance")
-    @Operation(summary = "RFID 출입 인증")
-    public ApiResponse<AttendanceResponse> attendance(@Valid @RequestBody AttendanceRequest request) {
-        return ApiResponse.created(iotService.attendance(request));
-    }
 
     @PostMapping("/biometrics")
     @Operation(summary = "생체 데이터 수집")
