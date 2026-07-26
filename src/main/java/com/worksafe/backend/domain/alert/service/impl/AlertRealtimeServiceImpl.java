@@ -40,24 +40,29 @@ public class AlertRealtimeServiceImpl implements AlertRealtimeService {
 
     @Override
     public void publish(AlertResponse alertResponse) {
+        publish("alert", alertResponse);
+    }
+
+    @Override
+    public void publish(String eventName, Object payload) {
         if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    send(alertResponse);
+                    send(eventName, payload);
                 }
             });
             return;
         }
 
-        send(alertResponse);
+        send(eventName, payload);
     }
 
-    private void send(AlertResponse alertResponse) {
+    private void send(String eventName, Object payload) {
         for (SseEmitter emitter : emitters) {
             try {
-                emitter.send(SseEmitter.event().name("alert").data(alertResponse));
+                emitter.send(SseEmitter.event().name(eventName).data(payload));
             } catch (IOException e) {
                 emitter.completeWithError(e);
                 emitters.remove(emitter);
