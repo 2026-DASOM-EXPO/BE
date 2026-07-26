@@ -26,8 +26,6 @@ import com.worksafe.backend.domain.risk.enums.RiskLevel;
 import com.worksafe.backend.domain.risk.enums.RiskStatus;
 import com.worksafe.backend.domain.risk.enums.RiskType;
 import com.worksafe.backend.domain.risk.repository.RiskEventRepository;
-import com.worksafe.backend.domain.risk.dto.request.RiskEventStatusUpdateRequest;
-import com.worksafe.backend.domain.risk.service.RiskService;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 import com.worksafe.backend.domain.worker.entity.Worker;
 import com.worksafe.backend.domain.worker.enums.WorkerStatus;
@@ -60,9 +58,6 @@ class MvpScenarioIntegrationTest {
 
     @Autowired
     private IotService iotService;
-
-    @Autowired
-    private RiskService riskService;
 
     @Autowired
     private MockMvc mockMvc;
@@ -183,7 +178,7 @@ class MvpScenarioIntegrationTest {
     }
 
     @Test
-    void sosZeroDoesNotCreateEmergencyAndSosOneCreatesLv3AlertAndDispatchWithout119OrVideo() {
+    void sosZeroDoesNothingAndSosOneCreatesOnlyLv3ManagerAlertBeforeApproval() {
         SafetyFixture fixture = saveSafetyFixture("sos");
         saveReadyDrone("sos");
 
@@ -194,14 +189,13 @@ class MvpScenarioIntegrationTest {
         assertThat(droneDispatchRepository.count()).isZero();
 
         SosResponse pressed = iotService.sos(sos(fixture, 1, 1));
-        List<DroneDispatch> dispatches = droneDispatchRepository.findAllByOrderByCreatedAtDesc();
-
         assertThat(pressed.triggered()).isTrue();
         assertThat(pressed.riskEvent().riskLevel()).isEqualTo(RiskLevel.LV3);
+        assertThat(pressed.droneDispatch()).isNull();
+        assertThat(pressed.emergencyCallRequested()).isFalse();
         assertThat(alertRepository.count()).isEqualTo(1);
         assertThat(wearableCommandRepository.count()).isZero();
-        assertThat(dispatches).hasSize(1);
-        assertThat(dispatches.getFirst().isEmergencyCallRequested()).isFalse();
+        assertThat(droneDispatchRepository.count()).isZero();
         assertThat(droneVideoRepository.count()).isZero();
     }
 
@@ -216,8 +210,11 @@ class MvpScenarioIntegrationTest {
         assertThat(first.triggered()).isTrue();
         assertThat(duplicate.triggered()).isFalse();
         assertThat(duplicate.riskEvent().id()).isEqualTo(first.riskEvent().id());
+        assertThat(first.droneDispatch()).isNull();
+        assertThat(duplicate.droneDispatch()).isNull();
         assertThat(alertRepository.count()).isEqualTo(1);
-        assertThat(droneDispatchRepository.count()).isEqualTo(1);
+        assertThat(droneDispatchRepository.count()).isZero();
+        assertThat(droneVideoRepository.count()).isZero();
 
         mockMvc.perform(patch("/api/risk-events/{riskEventId}/status", first.riskEvent().id())
                         .with(user("admin").roles("ADMIN"))
@@ -227,6 +224,10 @@ class MvpScenarioIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PROCESSING"));
+
+        List<DroneDispatch> dispatches = droneDispatchRepository.findAllByOrderByCreatedAtDesc();
+        assertThat(dispatches).hasSize(1);
+        assertThat(dispatches.getFirst().isEmergencyCallRequested()).isFalse();
 
         mockMvc.perform(get("/api/drones/{droneId}/videos/active", drone.getId())
                         .with(user("admin").roles("ADMIN")))
@@ -291,7 +292,6 @@ class MvpScenarioIntegrationTest {
                 .name("검증 작업자 " + suffix)
                 .department("MVP")
                 .phoneNumber("010-0000-0000")
-                .rfidTag("RFID-" + suffix)
                 .status(WorkerStatus.NORMAL)
                 .currentLatitude(37.4979)
                 .currentLongitude(127.0276)
