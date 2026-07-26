@@ -30,7 +30,18 @@ app:
   sensor:
     fsr-worn-threshold: ${FSR_WORN_THRESHOLD:1000}
   drone:
-    stream-base-url: ${DRONE_STREAM_BASE_URL:http://localhost:8888}
+    streaming:
+      enabled: ${DRONE_STREAM_ENABLED:true}
+      ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
+      source-url-template: ${DRONE_RTSP_URL_TEMPLATE:rtsp://192.168.144.25:8554/main.264}
+      output-directory: ${DRONE_STREAM_OUTPUT_DIR:./build/hls}
+      public-base-url: ${DRONE_STREAM_PUBLIC_BASE_URL:http://localhost:8080/streams}
+      startup-timeout-seconds: ${DRONE_STREAM_STARTUP_TIMEOUT:15}
+      width: ${DRONE_STREAM_WIDTH:1280}
+      height: ${DRONE_STREAM_HEIGHT:720}
+      frame-rate: ${DRONE_STREAM_FRAME_RATE:30}
+      segment-seconds: ${DRONE_STREAM_SEGMENT_SECONDS:1}
+      playlist-size: ${DRONE_STREAM_PLAYLIST_SIZE:6}
   cors:
     allowed-origins:
       - http://localhost:3000
