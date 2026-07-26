@@ -6,14 +6,6 @@ import com.worksafe.backend.domain.alert.enums.AlertSeverity;
 import com.worksafe.backend.domain.alert.converter.AlertConverter;
 import com.worksafe.backend.domain.alert.repository.AlertRepository;
 import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
-import com.worksafe.backend.domain.drone.entity.Drone;
-import com.worksafe.backend.domain.drone.entity.DroneDispatch;
-import com.worksafe.backend.domain.drone.enums.DroneDispatchStatus;
-import com.worksafe.backend.domain.drone.enums.DroneStatus;
-import com.worksafe.backend.domain.drone.enums.DropMethod;
-import com.worksafe.backend.domain.drone.enums.EmergencyCallStatus;
-import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
-import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
 import com.worksafe.backend.domain.equipment.entity.WearableCommand;
 import com.worksafe.backend.domain.equipment.enums.WearStatus;
@@ -63,8 +55,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     private final EquipmentRepository equipmentRepository;
     private final AlertRepository alertRepository;
     private final AlertRealtimeService alertRealtimeService;
-    private final DroneRepository droneRepository;
-    private final DroneDispatchRepository droneDispatchRepository;
     private final WearableCommandRepository wearableCommandRepository;
 
     @Override
@@ -188,9 +178,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         createAlertIfNeeded(riskEvent);
         if (riskEvent.getRiskType() == RiskType.NO_EQUIPMENT) {
             createBuzzerCommandIfNeeded(riskEvent);
-        }
-        if (riskEvent.getRiskType() == RiskType.SOS_REQUEST) {
-            dispatchDroneIfNeeded(riskEvent);
         }
         updateWorkerStatus(riskEvent.getWorker(), riskEvent.getRiskLevel());
     }
@@ -316,44 +303,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 .build());
     }
 
-    private void dispatchDroneIfNeeded(RiskEvent riskEvent) {
-        if (riskEvent.getRiskType() != RiskType.SOS_REQUEST) {
-            return;
-        }
-
-        Drone drone = droneRepository.findFirstByStatus(DroneStatus.READY).orElse(null);
-        if (drone == null) {
-            Alert alert = alertRepository.save(Alert.builder()
-                    .riskEvent(riskEvent)
-                    .worker(riskEvent.getWorker())
-                    .title("대기 중인 드론 없음")
-                    .message("대기 중인 드론이 없어 출동을 건너뜁니다.")
-                    .severity(mapSeverity(riskEvent.getRiskLevel()))
-                    .readStatus(AlertReadStatus.UNREAD)
-                    .build());
-            alertRealtimeService.publish(AlertConverter.toResponse(alert));
-            return;
-        }
-
-        DroneDispatch dispatch = droneDispatchRepository.save(DroneDispatch.builder()
-                .drone(drone)
-                .riskEvent(riskEvent)
-                .targetLatitude(riskEvent.getLatitude())
-                .targetLongitude(riskEvent.getLongitude())
-                .dispatchReason(dispatchReason(riskEvent))
-                .emergencyKitMounted(true)
-                .emergencyKitDropped(false)
-                .dropMethod(DropMethod.MANUAL)
-                .emergencyCallRequested(false)
-                .emergencyCallStatus(EmergencyCallStatus.NOT_REQUESTED)
-                .status(DroneDispatchStatus.DISPATCHED)
-                .commandMessage(riskEvent.getDescription())
-                .dispatchedAt(LocalDateTime.now())
-                .build());
-
-        drone.changeStatus(DroneStatus.FLYING);
-    }
-
     private void resolveEquipmentRiskIfRecovered(Worker worker) {
         List<RiskEvent> activeEquipmentRisks = riskEventRepository
                 .findByWorker_IdAndStatusInOrderByOccurredAtDesc(worker.getId(), ACTIVE_STATUSES)
@@ -397,7 +346,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 worker.getName(),
                 worker.getDepartment(),
                 worker.getPhoneNumber(),
-                worker.getRfidTag(),
                 status,
                 worker.getCurrentLatitude(),
                 worker.getCurrentLongitude()
@@ -428,20 +376,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             case LV2 -> "주의";
             case LV3 -> "위험";
             case LV4 -> "긴급";
-        };
-    }
-
-    private String dispatchReason(RiskEvent riskEvent) {
-        if (riskEvent.getSourceType() == RiskSourceType.SOS) {
-            return "SOS";
-        }
-        return switch (riskEvent.getRiskType()) {
-            case BIOMETRIC_ABNORMAL -> "생체 이상";
-            case FALL_DETECTED -> "낙상 감지";
-            case NO_EQUIPMENT -> "안전장비 미착용";
-            case SOS_REQUEST -> "SOS";
-            case LOCATION_ABNORMAL -> "위치 이상";
-            case DRONE_DISPATCHED -> "수동";
         };
     }
 

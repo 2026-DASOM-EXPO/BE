@@ -4,10 +4,14 @@ import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.drone.dto.response.DroneDispatchResponse;
 import com.worksafe.backend.domain.drone.dto.response.DroneVideoResponse;
+import com.worksafe.backend.domain.drone.dto.request.DroneDispatchCreateRequest;
 import com.worksafe.backend.domain.drone.converter.DroneConverter;
 import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
+import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.drone.entity.DroneVideo;
+import com.worksafe.backend.domain.drone.enums.DroneStatus;
+import com.worksafe.backend.domain.drone.service.DroneService;
 import com.worksafe.backend.domain.drone.enums.StreamStatus;
 import com.worksafe.backend.domain.drone.enums.VideoProtocol;
 import com.worksafe.backend.domain.drone.streaming.DroneStreamGateway;
@@ -25,6 +29,7 @@ import com.worksafe.backend.domain.risk.service.RiskEvaluationService;
 import com.worksafe.backend.domain.risk.service.RiskService;
 import com.worksafe.backend.domain.worker.entity.Worker;
 import com.worksafe.backend.domain.worker.repository.WorkerRepository;
+import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -44,6 +49,9 @@ public class RiskServiceImpl implements RiskService {
     private final DroneVideoRepository droneVideoRepository;
     private final DroneStreamGateway droneStreamGateway;
     private final DroneStreamingProperties droneStreamingProperties;
+    private final DroneRepository droneRepository;
+    private final DroneService droneService;
+    private final AlertRealtimeService alertRealtimeService;
 
     @Override
     public RiskEventResponse create(RiskEventCreateRequest request) {
@@ -73,7 +81,9 @@ public class RiskServiceImpl implements RiskService {
         if (riskEvent.getWorker() != null) {
             riskEvaluationService.evaluateWorkerRisk(riskEvent.getWorker().getId());
         }
-        return RiskEventConverter.toResponse(riskEvent);
+        RiskEventResponse response = RiskEventConverter.toResponse(riskEvent);
+        alertRealtimeService.publish("risk", response);
+        return response;
     }
 
     @Override
@@ -112,7 +122,15 @@ public class RiskServiceImpl implements RiskService {
     private void startSosVideo(RiskEvent riskEvent) {
         var dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.getId());
         if (dispatch == null) {
-            throw new BusinessException(ErrorCode.DRONE_DISPATCH_NOT_FOUND);
+            var drone = droneRepository.findFirstByStatus(DroneStatus.READY)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.DRONE_NOT_FOUND));
+            droneService.dispatch(drone.getId(), new DroneDispatchCreateRequest(
+                    riskEvent.getId(),
+                    riskEvent.getLatitude(),
+                    riskEvent.getLongitude(),
+                    "관리자 확인 SOS 수동 출동"
+            ));
+            return;
         }
         String streamKey = dispatch.getDrone().getSerialNumber();
         String playlistUrl = droneStreamGateway.playlistUrl(streamKey);

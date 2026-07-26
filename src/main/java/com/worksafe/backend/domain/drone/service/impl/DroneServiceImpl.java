@@ -23,6 +23,7 @@ import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
 import com.worksafe.backend.domain.drone.service.DroneService;
 import com.worksafe.backend.domain.drone.streaming.DroneStreamGateway;
 import com.worksafe.backend.domain.drone.streaming.DroneStreamingProperties;
+import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.risk.entity.RiskEvent;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -45,11 +47,14 @@ public class DroneServiceImpl implements DroneService {
     private final RiskEventRepository riskEventRepository;
     private final DroneStreamGateway droneStreamGateway;
     private final DroneStreamingProperties droneStreamingProperties;
+    private final AlertRealtimeService alertRealtimeService;
 
     @Override
     public DroneResponse create(DroneCreateRequest request) {
         Drone drone = DroneConverter.toEntity(request);
-        return DroneConverter.toResponse(droneRepository.save(drone));
+        Drone saved = droneRepository.save(drone);
+        publishDrone(saved);
+        return DroneConverter.toResponse(saved);
     }
 
     @Override
@@ -76,12 +81,14 @@ public class DroneServiceImpl implements DroneService {
                 request.maxFlightMinutes(),
                 request.payloadMounted()
         );
+        publishDrone(drone);
         return DroneConverter.toResponse(drone);
     }
 
     @Override
     public void delete(Long droneId) {
         droneRepository.delete(getDrone(droneId));
+        alertRealtimeService.publish("drone-deleted", Map.of("id", droneId));
     }
 
     @Override
@@ -111,6 +118,10 @@ public class DroneServiceImpl implements DroneService {
                 .build());
 
         drone.changeStatus(DroneStatus.FLYING);
+        DroneVideo video = startDispatchVideo(dispatch);
+        publishDrone(drone);
+        alertRealtimeService.publish("dispatch", DroneConverter.toDispatchResponse(dispatch));
+        alertRealtimeService.publish("video", DroneConverter.toVideoResponse(video));
         return DroneConverter.toDispatchResponse(dispatch);
     }
 
@@ -133,12 +144,20 @@ public class DroneServiceImpl implements DroneService {
                 || request.status() == DroneDispatchStatus.FAILED
                 || request.status() == DroneDispatchStatus.CANCELED) {
             dispatch.getDrone().changeStatus(DroneStatus.READY);
+            videoRepository.findFirstByDispatch_IdOrderByCreatedAtDesc(dispatch.getId())
+                    .ifPresent(video -> {
+                        droneStreamGateway.stop(video.getDrone().getSerialNumber());
+                        video.stop();
+                        alertRealtimeService.publish("video", DroneConverter.toVideoResponse(video));
+                    });
         }
         if (request.status() == DroneDispatchStatus.ARRIVED
                 || request.status() == DroneDispatchStatus.KIT_DROPPED) {
             dispatch.getDrone().changeStatus(DroneStatus.FLYING);
         }
 
+        publishDrone(dispatch.getDrone());
+        alertRealtimeService.publish("dispatch", DroneConverter.toDispatchResponse(dispatch));
         return DroneConverter.toDispatchResponse(dispatch);
     }
 
@@ -182,7 +201,9 @@ public class DroneServiceImpl implements DroneService {
             video.fail();
             throw e;
         }
-        return DroneConverter.toVideoResponse(video);
+        DroneVideoResponse response = DroneConverter.toVideoResponse(video);
+        alertRealtimeService.publish("video", response);
+        return response;
     }
 
     @Override
@@ -190,14 +211,18 @@ public class DroneServiceImpl implements DroneService {
         DroneVideo video = getVideo(videoId);
         droneStreamGateway.stop(video.getDrone().getSerialNumber());
         video.stop();
-        return DroneConverter.toVideoResponse(video);
+        DroneVideoResponse response = DroneConverter.toVideoResponse(video);
+        alertRealtimeService.publish("video", response);
+        return response;
     }
 
     @Override
     public DroneVideoResponse findActiveVideo(Long droneId) {
         DroneVideo video = videoRepository.findFirstByDrone_IdAndActiveTrue(droneId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DRONE_NOT_FOUND));
-        return DroneConverter.toVideoResponse(video);
+        DroneVideoResponse response = DroneConverter.toVideoResponse(video);
+        alertRealtimeService.publish("video", response);
+        return response;
     }
 
     private Drone getDrone(Long droneId) {
@@ -213,5 +238,35 @@ public class DroneServiceImpl implements DroneService {
     private DroneVideo getVideo(Long videoId) {
         return videoRepository.findById(videoId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DRONE_NOT_FOUND));
+    }
+
+    private DroneVideo startDispatchVideo(DroneDispatch dispatch) {
+        Drone drone = dispatch.getDrone();
+        String streamKey = drone.getSerialNumber();
+        String playlistUrl = droneStreamGateway.playlistUrl(streamKey);
+        DroneVideo video = videoRepository.save(DroneVideo.builder()
+                .drone(drone)
+                .dispatch(dispatch)
+                .title("현장 실시간 영상")
+                .description("관리자 수동 출동과 함께 시작된 720p 영상")
+                .streamUrl(playlistUrl)
+                .protocol(com.worksafe.backend.domain.drone.enums.VideoProtocol.HLS)
+                .active(false)
+                .streamStatus(StreamStatus.READY)
+                .width(droneStreamingProperties.targetWidth())
+                .height(droneStreamingProperties.targetHeight())
+                .frameRate(droneStreamingProperties.targetFrameRate())
+                .build());
+        try {
+            droneStreamGateway.start(streamKey);
+            video.start();
+        } catch (RuntimeException exception) {
+            video.fail();
+        }
+        return video;
+    }
+
+    private void publishDrone(Drone drone) {
+        alertRealtimeService.publish("drone", DroneConverter.toResponse(drone));
     }
 }
