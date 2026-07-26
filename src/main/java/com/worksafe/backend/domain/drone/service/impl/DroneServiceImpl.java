@@ -21,6 +21,8 @@ import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
 import com.worksafe.backend.domain.drone.service.DroneService;
+import com.worksafe.backend.domain.drone.streaming.DroneStreamGateway;
+import com.worksafe.backend.domain.drone.streaming.DroneStreamingProperties;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.risk.entity.RiskEvent;
@@ -41,6 +43,8 @@ public class DroneServiceImpl implements DroneService {
     private final DroneDispatchRepository dispatchRepository;
     private final DroneVideoRepository videoRepository;
     private final RiskEventRepository riskEventRepository;
+    private final DroneStreamGateway droneStreamGateway;
+    private final DroneStreamingProperties droneStreamingProperties;
 
     @Override
     public DroneResponse create(DroneCreateRequest request) {
@@ -164,13 +168,27 @@ public class DroneServiceImpl implements DroneService {
         videoRepository.findFirstByDrone_IdAndActiveTrue(video.getDrone().getId())
                 .filter(activeVideo -> !activeVideo.getId().equals(videoId))
                 .ifPresent(DroneVideo::deactivate);
-        video.start();
+        String streamKey = video.getDrone().getSerialNumber();
+        video.configureStream(
+                droneStreamGateway.playlistUrl(streamKey),
+                droneStreamingProperties.targetWidth(),
+                droneStreamingProperties.targetHeight(),
+                droneStreamingProperties.targetFrameRate()
+        );
+        try {
+            droneStreamGateway.start(streamKey);
+            video.start();
+        } catch (RuntimeException e) {
+            video.fail();
+            throw e;
+        }
         return DroneConverter.toVideoResponse(video);
     }
 
     @Override
     public DroneVideoResponse stopVideo(Long videoId) {
         DroneVideo video = getVideo(videoId);
+        droneStreamGateway.stop(video.getDrone().getSerialNumber());
         video.stop();
         return DroneConverter.toVideoResponse(video);
     }

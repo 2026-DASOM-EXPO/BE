@@ -101,7 +101,23 @@ public class DroneVideo extends BaseEntity {
     public void start() {
         this.active = true;
         this.startedAt = LocalDateTime.now();
+        this.endedAt = null;
         this.streamStatus = StreamStatus.STREAMING;
+    }
+
+    public void configureStream(String streamUrl, Integer width, Integer height, Integer frameRate) {
+        this.streamUrl = streamUrl;
+        this.protocol = VideoProtocol.HLS;
+        this.width = width;
+        this.height = height;
+        this.frameRate = frameRate;
+        this.streamStatus = StreamStatus.READY;
+    }
+
+    public void fail() {
+        this.active = false;
+        this.endedAt = LocalDateTime.now();
+        this.streamStatus = StreamStatus.FAILED;
     }
 
     public void stop() {

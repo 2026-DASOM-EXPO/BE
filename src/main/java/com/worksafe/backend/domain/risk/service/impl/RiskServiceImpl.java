@@ -10,6 +10,8 @@ import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
 import com.worksafe.backend.domain.drone.entity.DroneVideo;
 import com.worksafe.backend.domain.drone.enums.StreamStatus;
 import com.worksafe.backend.domain.drone.enums.VideoProtocol;
+import com.worksafe.backend.domain.drone.streaming.DroneStreamGateway;
+import com.worksafe.backend.domain.drone.streaming.DroneStreamingProperties;
 import com.worksafe.backend.domain.risk.converter.RiskEventConverter;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventCreateRequest;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventStatusUpdateRequest;
@@ -26,7 +28,6 @@ import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,9 +42,8 @@ public class RiskServiceImpl implements RiskService {
     private final RiskEvaluationService riskEvaluationService;
     private final DroneDispatchRepository droneDispatchRepository;
     private final DroneVideoRepository droneVideoRepository;
-
-    @Value("${app.drone.stream-base-url:http://localhost:8888}")
-    private String streamBaseUrl;
+    private final DroneStreamGateway droneStreamGateway;
+    private final DroneStreamingProperties droneStreamingProperties;
 
     @Override
     public RiskEventResponse create(RiskEventCreateRequest request) {
@@ -114,23 +114,35 @@ public class RiskServiceImpl implements RiskService {
         if (dispatch == null) {
             throw new BusinessException(ErrorCode.DRONE_DISPATCH_NOT_FOUND);
         }
+        String streamKey = dispatch.getDrone().getSerialNumber();
+        String playlistUrl = droneStreamGateway.playlistUrl(streamKey);
         DroneVideo video = droneVideoRepository.findFirstByDispatch_IdOrderByCreatedAtDesc(dispatch.getId())
                 .orElseGet(() -> droneVideoRepository.save(DroneVideo.builder()
                         .drone(dispatch.getDrone())
                         .dispatch(dispatch)
                         .title("SOS 현장 영상")
                         .description("관리자 확인 후 시작된 720p 현장 영상")
-                        .streamUrl(streamBaseUrl.replaceAll("/$", "")
-                                + "/" + dispatch.getDrone().getSerialNumber() + "/index.m3u8")
+                        .streamUrl(playlistUrl)
                         .protocol(VideoProtocol.HLS)
                         .active(false)
                         .streamStatus(StreamStatus.READY)
-                        .width(1280)
-                        .height(720)
-                        .frameRate(30)
+                        .width(droneStreamingProperties.targetWidth())
+                        .height(droneStreamingProperties.targetHeight())
+                        .frameRate(droneStreamingProperties.targetFrameRate())
                         .build()));
-        if (!video.isActive()) {
+        video.configureStream(
+                playlistUrl,
+                droneStreamingProperties.targetWidth(),
+                droneStreamingProperties.targetHeight(),
+                droneStreamingProperties.targetFrameRate()
+        );
+        try {
+            // 서버 재시작 뒤 DB에는 active=true가 남아 있어도 FFmpeg 프로세스는 사라지므로 항상 확인한다.
+            droneStreamGateway.start(streamKey);
             video.start();
+        } catch (RuntimeException e) {
+            video.fail();
+            throw e;
         }
     }
 
