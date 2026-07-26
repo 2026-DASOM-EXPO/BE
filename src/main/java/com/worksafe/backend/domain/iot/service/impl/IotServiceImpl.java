@@ -14,20 +14,18 @@ import com.worksafe.backend.domain.drone.enums.DroneStatus;
 import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
+import com.worksafe.backend.domain.equipment.converter.EquipmentConverter;
 import com.worksafe.backend.domain.equipment.enums.EquipmentType;
 import com.worksafe.backend.domain.equipment.enums.WearStatus;
-import com.worksafe.backend.domain.equipment.enums.AttendanceType;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
-import com.worksafe.backend.domain.iot.dto.request.AttendanceRequest;
 import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
 import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
-import com.worksafe.backend.domain.iot.dto.response.AttendanceResponse;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
 import com.worksafe.backend.domain.risk.dto.request.RiskEventCreateRequest;
@@ -47,7 +45,7 @@ import com.worksafe.backend.domain.sensor.entity.SensorLog;
 import com.worksafe.backend.domain.sensor.enums.SensorType;
 import com.worksafe.backend.domain.sensor.repository.SensorLogRepository;
 import com.worksafe.backend.domain.worker.entity.Worker;
-import com.worksafe.backend.domain.worker.enums.WorkerStatus;
+import com.worksafe.backend.domain.worker.converter.WorkerConverter;
 import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -77,39 +75,6 @@ public class IotServiceImpl implements IotService {
 
     @Value("${app.sensor.fsr-worn-threshold:1000}")
     private int fsrWornThreshold;
-
-    @Override
-    public AttendanceResponse attendance(AttendanceRequest request) {
-        Worker worker = getWorkerByRfid(request.rfidTag());
-        AttendanceType attendanceType = request.attendanceType();
-
-        if (attendanceType == AttendanceType.CHECK_IN && worker.getStatus() != WorkerStatus.INACTIVE) {
-            throw new BusinessException(ErrorCode.ALREADY_CHECKED_IN);
-        }
-        if (attendanceType == AttendanceType.CHECK_OUT && worker.getStatus() == WorkerStatus.INACTIVE) {
-            throw new BusinessException(ErrorCode.ALREADY_CHECKED_OUT);
-        }
-
-        worker.update(
-                worker.getName(),
-                worker.getDepartment(),
-                worker.getPhoneNumber(),
-                worker.getRfidTag(),
-                attendanceType == AttendanceType.CHECK_IN ? WorkerStatus.NORMAL : WorkerStatus.INACTIVE,
-                worker.getCurrentLatitude(),
-                worker.getCurrentLongitude()
-        );
-
-        sensorLogRepository.save(SensorLog.builder()
-                .worker(worker)
-                .sensorType(SensorType.RFID)
-                .rawPayload(request.rfidTag())
-                .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
-                .build());
-
-        return new AttendanceResponse(worker.getId(), worker.getName(), worker.getStatus());
-    }
 
     @Override
     public SensorLogResponse biometrics(BiometricRequest request) {
@@ -185,7 +150,11 @@ public class IotServiceImpl implements IotService {
         riskEvaluationService.evaluateByEquipmentStatus(worker.getId());
         RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
         saved.applyAssessment(detectedWearStatus, riskLevel);
-        return SensorLogConverter.toResponse(saved);
+        SensorLogResponse response = SensorLogConverter.toResponse(saved);
+        alertRealtimeService.publish("sensor", response);
+        alertRealtimeService.publish("equipment", EquipmentConverter.toResponse(equipment));
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
+        return response;
     }
 
     @Override
@@ -199,11 +168,13 @@ public class IotServiceImpl implements IotService {
             throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
-        sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = sensorLogRepository.save(buildSensorLog(
                 worker,
                 equipment,
                 request
         ));
+        alertRealtimeService.publish("sensor", SensorLogConverter.toResponse(saved));
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
 
         if (request.buttonValue() == 0) {
             return new SosResponse(0, false, null, null, false, false);
@@ -287,11 +258,6 @@ public class IotServiceImpl implements IotService {
 
     private Worker getWorker(Long workerId) {
         return workerRepository.findById(workerId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.WORKER_NOT_FOUND));
-    }
-
-    private Worker getWorkerByRfid(String rfidTag) {
-        return workerRepository.findByRfidTag(rfidTag)
                 .orElseThrow(() -> new BusinessException(ErrorCode.WORKER_NOT_FOUND));
     }
 
