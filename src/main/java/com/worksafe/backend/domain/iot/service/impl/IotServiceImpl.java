@@ -84,11 +84,15 @@ public class IotServiceImpl implements IotService {
         Equipment equipment = getEquipmentIfPresent(request.equipmentId());
         ensureEquipmentMatchesWorker(worker, equipment);
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
-                equipment,
-                request
-        ));
+                SensorType.BIOMETRIC,
+                buildSensorLog(
+                        worker,
+                        equipment,
+                        request
+                )
+        );
 
         riskEvaluationService.evaluateBySensorLog(saved);
         riskEvaluationService.evaluateWorkerRisk(worker.getId());
@@ -102,11 +106,15 @@ public class IotServiceImpl implements IotService {
     public SensorLogResponse heart(HeartRequest request) {
         Worker worker = getWorker(request.workerId());
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
-                null,
-                request
-        ));
+                SensorType.BIOMETRIC,
+                buildSensorLog(
+                        worker,
+                        null,
+                        request
+                )
+        );
 
         riskEvaluationService.evaluateBySensorLog(saved);
         RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
@@ -121,11 +129,15 @@ public class IotServiceImpl implements IotService {
     public SensorLogResponse imu(ImuRequest request) {
         Worker worker = getWorker(request.workerId());
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
-                null,
-                request
-        ));
+                SensorType.MOTION,
+                buildSensorLog(
+                        worker,
+                        null,
+                        request
+                )
+        );
 
         riskEvaluationService.evaluateBySensorLog(saved);
         RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
@@ -140,11 +152,15 @@ public class IotServiceImpl implements IotService {
     public SensorLogResponse gps(GpsRequest request) {
         Worker worker = getWorker(request.workerId());
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
-                null,
-                request
-        ));
+                SensorType.GPS,
+                buildSensorLog(
+                        worker,
+                        null,
+                        request
+                )
+        );
 
         worker.updateLocation(request.latitude(), request.longitude());
         SensorLogResponse response = SensorLogConverter.toResponse(saved);
@@ -167,12 +183,17 @@ public class IotServiceImpl implements IotService {
                 : WearStatus.NOT_WORN;
         equipment.updateWearStatus(detectedWearStatus, LocalDateTime.now());
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByEquipment(
                 worker,
                 equipment,
-                request,
-                detectedWearStatus
-        ));
+                SensorType.WEAR_STATUS,
+                buildSensorLog(
+                        worker,
+                        equipment,
+                        request,
+                        detectedWearStatus
+                )
+        );
 
         riskEvaluationService.evaluateByEquipmentStatus(worker.getId());
         RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
@@ -195,11 +216,15 @@ public class IotServiceImpl implements IotService {
             throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
-        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+        SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
-                equipment,
-                request
-        ));
+                SensorType.SOS,
+                buildSensorLog(
+                        worker,
+                        equipment,
+                        request
+                )
+        );
         alertRealtimeService.publish("sensor", SensorLogConverter.toResponse(saved));
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
 
@@ -312,6 +337,36 @@ public class IotServiceImpl implements IotService {
         }
         return droneDispatchRepository.findById(dispatchId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DRONE_DISPATCH_NOT_FOUND));
+    }
+
+    private SensorLog saveOrUpdateCurrentByWorker(Worker worker, SensorType sensorType, SensorLog newState) {
+        SensorLog current = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(
+                worker.getId(),
+                sensorType
+        );
+        if (current == null) {
+            return sensorLogRepository.save(newState);
+        }
+        current.updateCurrentState(newState);
+        return current;
+    }
+
+    private SensorLog saveOrUpdateCurrentByEquipment(
+            Worker worker,
+            Equipment equipment,
+            SensorType sensorType,
+            SensorLog newState
+    ) {
+        SensorLog current = sensorLogRepository.findTopByWorker_IdAndSensorTypeAndEquipment_IdOrderByMeasuredAtDesc(
+                worker.getId(),
+                sensorType,
+                equipment.getId()
+        );
+        if (current == null) {
+            return sensorLogRepository.save(newState);
+        }
+        current.updateCurrentState(newState);
+        return current;
     }
 
     private SensorLog buildSensorLog(Worker worker, Equipment equipment, BiometricRequest request) {

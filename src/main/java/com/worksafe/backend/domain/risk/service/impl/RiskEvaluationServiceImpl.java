@@ -100,7 +100,16 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         }
 
         RiskEvent existing = findActiveRiskEvent(worker.getId(), riskType);
-        if (existing != null && existing.getRiskLevel().ordinal() >= riskLevel.ordinal()) {
+        if (existing != null) {
+            updateActiveRiskEvent(
+                    existing,
+                    RiskSourceType.SENSOR,
+                    riskLevel,
+                    buildDescription(sensorLog, riskType, riskLevel),
+                    sensorLog.getLatitude(),
+                    sensorLog.getLongitude(),
+                    sensorLog.getMeasuredAt() == null ? LocalDateTime.now() : sensorLog.getMeasuredAt()
+            );
             updateWorkerStatus(worker, existing.getRiskLevel());
             return RiskEventConverter.toResponse(existing);
         }
@@ -132,7 +141,16 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
         RiskType riskType = RiskType.NO_EQUIPMENT;
         RiskEvent existing = findActiveRiskEvent(workerId, riskType);
-        if (existing != null && existing.getRiskLevel().ordinal() >= riskLevel.ordinal()) {
+        if (existing != null) {
+            updateActiveRiskEvent(
+                    existing,
+                    RiskSourceType.SENSOR,
+                    riskLevel,
+                    "Safety equipment is not fully worn.",
+                    existing.getLatitude(),
+                    existing.getLongitude(),
+                    LocalDateTime.now()
+            );
             updateWorkerStatus(worker, existing.getRiskLevel());
             return RiskEventConverter.toResponse(existing);
         }
@@ -267,6 +285,9 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         if (riskEvent.getRiskLevel().ordinal() < RiskLevel.LV2.ordinal()) {
             return;
         }
+        if (riskEvent.getId() != null && alertRepository.existsByRiskEvent_Id(riskEvent.getId())) {
+            return;
+        }
 
         Alert alert = alertRepository.save(Alert.builder()
                 .riskEvent(riskEvent)
@@ -277,6 +298,26 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 .readStatus(AlertReadStatus.UNREAD)
                 .build());
         alertRealtimeService.publish(AlertConverter.toResponse(alert));
+    }
+
+    private void updateActiveRiskEvent(
+            RiskEvent riskEvent,
+            RiskSourceType sourceType,
+            RiskLevel riskLevel,
+            String description,
+            Double latitude,
+            Double longitude,
+            LocalDateTime occurredAt
+    ) {
+        RiskLevel nextRiskLevel = max(riskEvent.getRiskLevel(), riskLevel);
+        riskEvent.updateCurrentRisk(
+                sourceType,
+                nextRiskLevel,
+                description,
+                latitude,
+                longitude,
+                occurredAt
+        );
     }
 
     private void createBuzzerCommandIfNeeded(RiskEvent riskEvent) {

@@ -87,4 +87,20 @@ public class RiskEvent extends BaseEntity {
             this.resolvedAt = LocalDateTime.now();
         }
     }
+
+    public void updateCurrentRisk(
+            RiskSourceType sourceType,
+            RiskLevel riskLevel,
+            String description,
+            Double latitude,
+            Double longitude,
+            LocalDateTime occurredAt
+    ) {
+        this.sourceType = sourceType;
+        this.riskLevel = riskLevel;
+        this.description = description;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.occurredAt = occurredAt;
+    }
 }

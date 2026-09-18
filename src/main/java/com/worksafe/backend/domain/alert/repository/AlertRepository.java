@@ -25,6 +25,8 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     long countByReadStatus(AlertReadStatus readStatus);
 
+    boolean existsByRiskEvent_Id(Long riskEventId);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             UPDATE Alert a
