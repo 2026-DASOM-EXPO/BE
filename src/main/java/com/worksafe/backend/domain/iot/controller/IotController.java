@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,23 +37,22 @@ public class IotController {
         return ApiResponse.created(iotService.biometrics(request));
     }
 
-    @PostMapping("/heart")
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "심박수 센서 데이터 수집")
+    @PatchMapping("/heart")
+    @Operation(summary = "심박수 센서 현재 상태 갱신")
     public ApiResponse<SensorLogResponse> heart(@Valid @RequestBody HeartRequest request) {
-        return ApiResponse.created(iotService.heart(request));
+        return ApiResponse.success(iotService.heart(request));
     }
 
-    @PostMapping("/imu")
-    @Operation(summary = "IMU 데이터 수집")
+    @PatchMapping("/imu")
+    @Operation(summary = "IMU 센서 현재 상태 갱신")
     public ApiResponse<SensorLogResponse> imu(@Valid @RequestBody ImuRequest request) {
-        return ApiResponse.created(iotService.imu(request));
+        return ApiResponse.success(iotService.imu(request));
     }
 
-    @PostMapping("/gps")
-    @Operation(summary = "GPS 위치 수집")
+    @PatchMapping("/gps")
+    @Operation(summary = "GPS 현재 위치 갱신")
     public ApiResponse<SensorLogResponse> gps(@Valid @RequestBody GpsRequest request) {
-        return ApiResponse.created(iotService.gps(request));
+        return ApiResponse.success(iotService.gps(request));
     }
 
     @PostMapping("/equipment-status")
