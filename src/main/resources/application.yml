@@ -22,6 +22,7 @@ spring:
         format_sql: true
 
 server:
+  forward-headers-strategy: framework
   error:
     whitelabel:
       enabled: false
@@ -46,6 +47,8 @@ app:
     allowed-origins:
       - http://localhost:3000
       - http://localhost:5173
+      - https://*.up.railway.app
+      - https://*.railway.app
     allowed-methods:
       - GET
       - POST
