@@ -23,9 +23,9 @@ public final class SensorLogConverter {
                 .bpm(request.bpm())
                 .spo2(request.spo2())
                 .bodyTemperature(request.bodyTemperature())
-                .accelerationX(request.accelerationX())
-                .accelerationY(request.accelerationY())
-                .accelerationZ(request.accelerationZ())
+                .accelX(request.accelX())
+                .accelY(request.accelY())
+                .accelZ(request.accelZ())
                 .gyroX(request.gyroX())
                 .gyroY(request.gyroY())
                 .gyroZ(request.gyroZ())
@@ -61,9 +61,9 @@ public final class SensorLogConverter {
                 sensorLog.getBpm(),
                 sensorLog.getSpo2(),
                 sensorLog.getBodyTemperature(),
-                sensorLog.getAccelerationX(),
-                sensorLog.getAccelerationY(),
-                sensorLog.getAccelerationZ(),
+                sensorLog.getAccelX(),
+                sensorLog.getAccelY(),
+                sensorLog.getAccelZ(),
                 sensorLog.getGyroX(),
                 sensorLog.getGyroY(),
                 sensorLog.getGyroZ(),
