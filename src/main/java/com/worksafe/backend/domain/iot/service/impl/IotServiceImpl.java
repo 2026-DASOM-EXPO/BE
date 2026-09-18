@@ -25,6 +25,7 @@ import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
+import com.worksafe.backend.domain.iot.dto.request.HeartRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
@@ -90,7 +91,29 @@ public class IotServiceImpl implements IotService {
 
         riskEvaluationService.evaluateBySensorLog(saved);
         riskEvaluationService.evaluateWorkerRisk(worker.getId());
-        return SensorLogConverter.toResponse(saved);
+        SensorLogResponse response = SensorLogConverter.toResponse(saved);
+        alertRealtimeService.publish("sensor", response);
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
+        return response;
+    }
+
+    @Override
+    public SensorLogResponse heart(HeartRequest request) {
+        Worker worker = getWorker(request.workerId());
+
+        SensorLog saved = sensorLogRepository.save(buildSensorLog(
+                worker,
+                null,
+                request
+        ));
+
+        riskEvaluationService.evaluateBySensorLog(saved);
+        RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        saved.applyAssessment(null, riskLevel);
+        SensorLogResponse response = SensorLogConverter.toResponse(saved);
+        alertRealtimeService.publish("sensor", response);
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
+        return response;
     }
 
     @Override
@@ -113,17 +136,18 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse gps(GpsRequest request) {
         Worker worker = getWorker(request.workerId());
-        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
-        ensureEquipmentMatchesWorker(worker, equipment);
 
         SensorLog saved = sensorLogRepository.save(buildSensorLog(
                 worker,
-                equipment,
+                null,
                 request
         ));
 
         worker.updateLocation(request.latitude(), request.longitude());
-        return SensorLogConverter.toResponse(saved);
+        SensorLogResponse response = SensorLogConverter.toResponse(saved);
+        alertRealtimeService.publish("sensor", response);
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
+        return response;
     }
 
     @Override
@@ -138,7 +162,7 @@ public class IotServiceImpl implements IotService {
         WearStatus detectedWearStatus = request.pressureValue() >= fsrWornThreshold
                 ? WearStatus.WORN
                 : WearStatus.NOT_WORN;
-        equipment.updateWearStatus(detectedWearStatus, request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt());
+        equipment.updateWearStatus(detectedWearStatus, LocalDateTime.now());
 
         SensorLog saved = sensorLogRepository.save(buildSensorLog(
                 worker,
@@ -206,7 +230,7 @@ public class IotServiceImpl implements IotService {
                 request.message(),
                 request.latitude(),
                 request.longitude(),
-                request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt()
+                LocalDateTime.now()
         ));
         DroneDispatch dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.id());
         return new SosResponse(
@@ -235,7 +259,7 @@ public class IotServiceImpl implements IotService {
                 .ultrasonicDistance(request.ultrasonicDistance())
                 .rawPayload(Boolean.TRUE.equals(request.obstacleDetected()) ? "obstacleDetected=true" : "obstacleDetected=false")
                 .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
                 .build());
 
         if (Boolean.TRUE.equals(request.obstacleDetected())) {
@@ -296,7 +320,19 @@ public class IotServiceImpl implements IotService {
                 .spo2(request.spo2())
                 .bodyTemperature(request.bodyTemperature())
                 .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
+                .build();
+    }
+
+    private SensorLog buildSensorLog(Worker worker, Equipment equipment, HeartRequest request) {
+        return SensorLog.builder()
+                .worker(worker)
+                .equipment(equipment)
+                .sensorType(SensorType.BIOMETRIC)
+                .bpm(request.bpm())
+                .rawPayload("source=HEART")
+                .sosPressed(false)
+                .measuredAt(LocalDateTime.now())
                 .build();
     }
 
@@ -316,7 +352,7 @@ public class IotServiceImpl implements IotService {
                 .tiltZ(request.tiltZ())
                 .impactAmount(request.impactAmount())
                 .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
                 .build();
     }
 
@@ -327,9 +363,8 @@ public class IotServiceImpl implements IotService {
                 .sensorType(SensorType.GPS)
                 .latitude(request.latitude())
                 .longitude(request.longitude())
-                .speed(request.speed())
                 .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
                 .build();
     }
 
@@ -346,7 +381,7 @@ public class IotServiceImpl implements IotService {
                 .pressureValue(request.pressureValue())
                 .wearStatus(detectedWearStatus)
                 .sosPressed(false)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
                 .build();
     }
 
@@ -359,7 +394,7 @@ public class IotServiceImpl implements IotService {
                 .longitude(request.longitude())
                 .rawPayload(request.message())
                 .sosPressed(request.buttonValue() == 1)
-                .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
+                .measuredAt(LocalDateTime.now())
                 .build();
     }
 }
