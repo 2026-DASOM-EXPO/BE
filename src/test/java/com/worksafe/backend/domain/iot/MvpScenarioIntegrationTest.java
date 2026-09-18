@@ -251,8 +251,7 @@ class MvpScenarioIntegrationTest {
                 {
                   "workerId": %d,
                   "equipmentId": %d,
-                  "pressureValue": %d,
-                  "measuredAt": "2026-07-24T10:00:00"
+                  "pressureValue": %d
                 }
                 """.formatted(worker.getId(), equipment.getId(), pressureValue);
     }
@@ -262,8 +261,7 @@ class MvpScenarioIntegrationTest {
                 worker.getId(),
                 equipment.getId(),
                 null,
-                pressure,
-                LocalDateTime.of(2026, 7, 24, 10, 2, second)
+                pressure
         );
     }
 
@@ -274,8 +272,7 @@ class MvpScenarioIntegrationTest {
                 buttonValue,
                 37.4979,
                 127.0276,
-                "SOS 통합 검증",
-                LocalDateTime.of(2026, 7, 24, 10, 5, second)
+                "SOS 통합 검증"
         );
     }
 

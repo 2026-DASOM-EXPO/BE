@@ -2,8 +2,6 @@ package com.worksafe.backend.domain.iot.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 
-import java.time.LocalDateTime;
-
 public record DroneObstacleRequest(
         @NotNull Long droneId,
         Long dispatchId,
@@ -14,7 +12,6 @@ public record DroneObstacleRequest(
         Double lidarSideLeft,
         Double lidarSideRight,
         Double ultrasonicDistance,
-        Boolean obstacleDetected,
-        LocalDateTime measuredAt
+        Boolean obstacleDetected
 ) {
 }

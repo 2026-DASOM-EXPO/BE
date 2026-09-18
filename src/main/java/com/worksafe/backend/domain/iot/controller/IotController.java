@@ -5,6 +5,7 @@ import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
+import com.worksafe.backend.domain.iot.dto.request.HeartRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
@@ -33,6 +34,13 @@ public class IotController {
     @Operation(summary = "생체 데이터 수집")
     public ApiResponse<SensorLogResponse> biometrics(@Valid @RequestBody BiometricRequest request) {
         return ApiResponse.created(iotService.biometrics(request));
+    }
+
+    @PostMapping("/heart")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "심박수 센서 데이터 수집")
+    public ApiResponse<SensorLogResponse> heart(@Valid @RequestBody HeartRequest request) {
+        return ApiResponse.created(iotService.heart(request));
     }
 
     @PostMapping("/imu")

@@ -36,13 +36,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String requestUri = request.getRequestURI();
-        for (String publicPath : PUBLIC_AUTH_PATHS) {
-            if (publicPath.equals(requestUri)) {
-                return true;
-            }
-        }
-        return false;
+        // TODO: MVP 현장 테스트 동안 JWT 토큰 유무와 만료 여부를 모두 무시합니다.
+        return true;
     }
 
     @Override
