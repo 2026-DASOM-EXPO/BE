@@ -42,9 +42,12 @@ public class SensorLog extends BaseEntity {
     private Integer bpm;
     private Double spo2;
     private Double bodyTemperature;
-    private Double accelerationX;
-    private Double accelerationY;
-    private Double accelerationZ;
+    @Column(name = "accelerationx")
+    private Double accelX;
+    @Column(name = "accelerationy")
+    private Double accelY;
+    @Column(name = "accelerationz")
+    private Double accelZ;
     private Double gyroX;
     private Double gyroY;
     private Double gyroZ;
@@ -87,9 +90,9 @@ public class SensorLog extends BaseEntity {
             Integer bpm,
             Double spo2,
             Double bodyTemperature,
-            Double accelerationX,
-            Double accelerationY,
-            Double accelerationZ,
+            Double accelX,
+            Double accelY,
+            Double accelZ,
             Double gyroX,
             Double gyroY,
             Double gyroZ,
@@ -120,9 +123,9 @@ public class SensorLog extends BaseEntity {
         this.bpm = bpm;
         this.spo2 = spo2;
         this.bodyTemperature = bodyTemperature;
-        this.accelerationX = accelerationX;
-        this.accelerationY = accelerationY;
-        this.accelerationZ = accelerationZ;
+        this.accelX = accelX;
+        this.accelY = accelY;
+        this.accelZ = accelZ;
         this.gyroX = gyroX;
         this.gyroY = gyroY;
         this.gyroZ = gyroZ;

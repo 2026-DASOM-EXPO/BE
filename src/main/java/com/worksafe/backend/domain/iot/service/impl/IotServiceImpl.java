@@ -62,6 +62,7 @@ import java.util.List;
 public class IotServiceImpl implements IotService {
 
     private static final List<RiskStatus> ACTIVE_RISK_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
+    private static final double GRAVITY_MS2 = 9.80665;
 
     private final SensorLogRepository sensorLogRepository;
     private final WorkerRepository workerRepository;
@@ -119,18 +120,20 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse imu(ImuRequest request) {
         Worker worker = getWorker(request.workerId());
-        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
-        ensureEquipmentMatchesWorker(worker, equipment);
 
         SensorLog saved = sensorLogRepository.save(buildSensorLog(
                 worker,
-                equipment,
+                null,
                 request
         ));
 
         riskEvaluationService.evaluateBySensorLog(saved);
-        riskEvaluationService.evaluateWorkerRisk(worker.getId());
-        return SensorLogConverter.toResponse(saved);
+        RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        saved.applyAssessment(null, riskLevel);
+        SensorLogResponse response = SensorLogConverter.toResponse(saved);
+        alertRealtimeService.publish("sensor", response);
+        alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
+        return response;
     }
 
     @Override
@@ -341,19 +344,23 @@ public class IotServiceImpl implements IotService {
                 .worker(worker)
                 .equipment(equipment)
                 .sensorType(SensorType.MOTION)
-                .accelerationX(request.accelerationX())
-                .accelerationY(request.accelerationY())
-                .accelerationZ(request.accelerationZ())
+                .accelX(toGravityUnit(request.accelX()))
+                .accelY(toGravityUnit(request.accelY()))
+                .accelZ(toGravityUnit(request.accelZ()))
                 .gyroX(request.gyroX())
                 .gyroY(request.gyroY())
                 .gyroZ(request.gyroZ())
-                .tiltX(request.tiltX())
-                .tiltY(request.tiltY())
-                .tiltZ(request.tiltZ())
-                .impactAmount(request.impactAmount())
+                .rawPayload("accelerationUnit=m/s^2;gyroscopeUnit=rad/s")
                 .sosPressed(false)
                 .measuredAt(LocalDateTime.now())
                 .build();
+    }
+
+    private Double toGravityUnit(Double value) {
+        if (value == null) {
+            return null;
+        }
+        return value / GRAVITY_MS2;
     }
 
     private SensorLog buildSensorLog(Worker worker, Equipment equipment, GpsRequest request) {

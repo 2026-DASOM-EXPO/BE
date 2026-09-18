@@ -242,7 +242,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     }
 
     private RiskLevel evaluateMotionRiskLevel(SensorLog sensorLog) {
-        double accelerationMagnitude = vectorMagnitude(sensorLog.getAccelerationX(), sensorLog.getAccelerationY(), sensorLog.getAccelerationZ());
+        double accelerationMagnitude = vectorMagnitude(sensorLog.getAccelX(), sensorLog.getAccelY(), sensorLog.getAccelZ());
         double maxTilt = maxAbs(sensorLog.getTiltX(), sensorLog.getTiltY(), sensorLog.getTiltZ());
         double impactAmount = sensorLog.getImpactAmount() == null ? 0.0 : sensorLog.getImpactAmount();
 
