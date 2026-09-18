@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.http.HttpStatus;
 
 @Tag(name = "IoT 수집 API", description = "생체 데이터, IMU, GPS, 안전장비, SOS, 드론 장애물 센서 수집")
 @RestController
@@ -55,18 +53,16 @@ public class IotController {
         return ApiResponse.success(iotService.gps(request));
     }
 
-    @PostMapping("/equipment-status")
-    @ResponseStatus(HttpStatus.CREATED)
+    @PatchMapping("/equipment-status")
     @Operation(summary = "안전장비 착용 상태 변경")
     public ApiResponse<SensorLogResponse> equipmentStatus(@Valid @RequestBody EquipmentStatusRequest request) {
-        return ApiResponse.created(iotService.equipmentStatus(request));
+        return ApiResponse.success(iotService.equipmentStatus(request));
     }
 
-    @PostMapping("/sos")
-    @ResponseStatus(HttpStatus.CREATED)
+    @PatchMapping("/sos")
     @Operation(summary = "SOS 긴급 신고")
     public ApiResponse<SosResponse> sos(@Valid @RequestBody SosRequest request) {
-        return ApiResponse.created(iotService.sos(request));
+        return ApiResponse.success(iotService.sos(request));
     }
 
     @PostMapping("/drone-obstacle")

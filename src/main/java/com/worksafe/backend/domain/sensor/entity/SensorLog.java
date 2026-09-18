@@ -155,4 +155,39 @@ public class SensorLog extends BaseEntity {
         this.wearStatus = wearStatus;
         this.riskLevel = riskLevel;
     }
+
+    public void updateCurrentState(SensorLog sensorLog) {
+        this.worker = sensorLog.worker;
+        this.equipment = sensorLog.equipment;
+        this.sensorType = sensorLog.sensorType;
+        this.bpm = sensorLog.bpm;
+        this.spo2 = sensorLog.spo2;
+        this.bodyTemperature = sensorLog.bodyTemperature;
+        this.accelX = sensorLog.accelX;
+        this.accelY = sensorLog.accelY;
+        this.accelZ = sensorLog.accelZ;
+        this.gyroX = sensorLog.gyroX;
+        this.gyroY = sensorLog.gyroY;
+        this.gyroZ = sensorLog.gyroZ;
+        this.tiltX = sensorLog.tiltX;
+        this.tiltY = sensorLog.tiltY;
+        this.tiltZ = sensorLog.tiltZ;
+        this.impactAmount = sensorLog.impactAmount;
+        this.latitude = sensorLog.latitude;
+        this.longitude = sensorLog.longitude;
+        this.speed = sensorLog.speed;
+        this.pressureValue = sensorLog.pressureValue;
+        this.lidarFrontLeft = sensorLog.lidarFrontLeft;
+        this.lidarFrontRight = sensorLog.lidarFrontRight;
+        this.lidarBackLeft = sensorLog.lidarBackLeft;
+        this.lidarBackRight = sensorLog.lidarBackRight;
+        this.lidarSideLeft = sensorLog.lidarSideLeft;
+        this.lidarSideRight = sensorLog.lidarSideRight;
+        this.ultrasonicDistance = sensorLog.ultrasonicDistance;
+        this.rawPayload = sensorLog.rawPayload;
+        this.wearStatus = sensorLog.wearStatus;
+        this.sosPressed = sensorLog.sosPressed;
+        this.riskLevel = sensorLog.riskLevel;
+        this.measuredAt = sensorLog.measuredAt;
+    }
 }

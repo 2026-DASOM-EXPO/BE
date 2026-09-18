@@ -17,4 +17,10 @@ public interface SensorLogRepository extends JpaRepository<SensorLog, Long> {
     SensorLog findTopByWorker_IdOrderByMeasuredAtDesc(Long workerId);
 
     SensorLog findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(Long workerId, SensorType sensorType);
+
+    SensorLog findTopByWorker_IdAndSensorTypeAndEquipment_IdOrderByMeasuredAtDesc(
+            Long workerId,
+            SensorType sensorType,
+            Long equipmentId
+    );
 }
