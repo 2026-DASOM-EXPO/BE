@@ -95,7 +95,8 @@ public class IotServiceImpl implements IotService {
         );
 
         riskEvaluationService.evaluateBySensorLog(saved);
-        riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        RiskLevel riskLevel = riskEvaluationService.evaluateWorkerRisk(worker.getId());
+        saved.applyAssessment(null, riskLevel);
         SensorLogResponse response = SensorLogConverter.toResponse(saved);
         alertRealtimeService.publish("sensor", response);
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
@@ -105,13 +106,15 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse heart(HeartRequest request) {
         Worker worker = getWorker(request.workerId());
+        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
+        ensureEquipmentMatchesWorker(worker, equipment);
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
                 SensorType.BIOMETRIC,
                 buildSensorLog(
                         worker,
-                        null,
+                        equipment,
                         request
                 )
         );
@@ -128,13 +131,15 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse imu(ImuRequest request) {
         Worker worker = getWorker(request.workerId());
+        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
+        ensureEquipmentMatchesWorker(worker, equipment);
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
                 SensorType.MOTION,
                 buildSensorLog(
                         worker,
-                        null,
+                        equipment,
                         request
                 )
         );
@@ -151,18 +156,20 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse gps(GpsRequest request) {
         Worker worker = getWorker(request.workerId());
+        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
+        ensureEquipmentMatchesWorker(worker, equipment);
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
                 SensorType.GPS,
                 buildSensorLog(
                         worker,
-                        null,
+                        equipment,
                         request
                 )
         );
 
-        worker.updateLocation(request.latitude(), request.longitude());
+        worker.updateLocation(saved.getLatitude(), saved.getLongitude());
         SensorLogResponse response = SensorLogConverter.toResponse(saved);
         alertRealtimeService.publish("sensor", response);
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
@@ -347,7 +354,9 @@ public class IotServiceImpl implements IotService {
         if (current == null) {
             return sensorLogRepository.save(newState);
         }
-        current.updateCurrentState(newState);
+        if (isNewerOrSame(newState, current)) {
+            current.updateCurrentState(newState);
+        }
         return current;
     }
 
@@ -365,7 +374,9 @@ public class IotServiceImpl implements IotService {
         if (current == null) {
             return sensorLogRepository.save(newState);
         }
-        current.updateCurrentState(newState);
+        if (isNewerOrSame(newState, current)) {
+            current.updateCurrentState(newState);
+        }
         return current;
     }
 
@@ -378,7 +389,7 @@ public class IotServiceImpl implements IotService {
                 .spo2(request.spo2())
                 .bodyTemperature(request.bodyTemperature())
                 .sosPressed(false)
-                .measuredAt(LocalDateTime.now())
+                .measuredAt(measuredAtOrNow(request.measuredAt()))
                 .build();
     }
 
@@ -390,7 +401,7 @@ public class IotServiceImpl implements IotService {
                 .bpm(request.bpm())
                 .rawPayload("source=HEART")
                 .sosPressed(false)
-                .measuredAt(LocalDateTime.now())
+                .measuredAt(measuredAtOrNow(request.measuredAt()))
                 .build();
     }
 
@@ -405,9 +416,13 @@ public class IotServiceImpl implements IotService {
                 .gyroX(request.gyroX())
                 .gyroY(request.gyroY())
                 .gyroZ(request.gyroZ())
-                .rawPayload("accelerationUnit=m/s^2;gyroscopeUnit=rad/s")
+                .tiltX(request.tiltX())
+                .tiltY(request.tiltY())
+                .tiltZ(request.tiltZ())
+                .impactAmount(request.impactAmount())
+                .rawPayload("accelerationUnit=m/s^2;gyroscopeUnit=rad/s;tiltUnit=degree;impactUnit=g")
                 .sosPressed(false)
-                .measuredAt(LocalDateTime.now())
+                .measuredAt(measuredAtOrNow(request.measuredAt()))
                 .build();
     }
 
@@ -418,6 +433,17 @@ public class IotServiceImpl implements IotService {
         return value / GRAVITY_MS2;
     }
 
+    private boolean isNewerOrSame(SensorLog candidate, SensorLog current) {
+        if (candidate.getMeasuredAt() == null) {
+            return true;
+        }
+        return current.getMeasuredAt() == null || !candidate.getMeasuredAt().isBefore(current.getMeasuredAt());
+    }
+
+    private LocalDateTime measuredAtOrNow(LocalDateTime measuredAt) {
+        return measuredAt == null ? LocalDateTime.now() : measuredAt;
+    }
+
     private SensorLog buildSensorLog(Worker worker, Equipment equipment, GpsRequest request) {
         return SensorLog.builder()
                 .worker(worker)
@@ -425,8 +451,9 @@ public class IotServiceImpl implements IotService {
                 .sensorType(SensorType.GPS)
                 .latitude(request.latitude())
                 .longitude(request.longitude())
+                .speed(request.speed())
                 .sosPressed(false)
-                .measuredAt(LocalDateTime.now())
+                .measuredAt(measuredAtOrNow(request.measuredAt()))
                 .build();
     }
 

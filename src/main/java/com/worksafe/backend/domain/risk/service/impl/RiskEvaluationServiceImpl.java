@@ -6,14 +6,6 @@ import com.worksafe.backend.domain.alert.enums.AlertSeverity;
 import com.worksafe.backend.domain.alert.converter.AlertConverter;
 import com.worksafe.backend.domain.alert.repository.AlertRepository;
 import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
-import com.worksafe.backend.domain.equipment.entity.Equipment;
-import com.worksafe.backend.domain.equipment.entity.WearableCommand;
-import com.worksafe.backend.domain.equipment.enums.WearStatus;
-import com.worksafe.backend.domain.equipment.enums.EquipmentType;
-import com.worksafe.backend.domain.equipment.enums.WearableCommandStatus;
-import com.worksafe.backend.domain.equipment.enums.WearableCommandType;
-import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
-import com.worksafe.backend.domain.equipment.repository.WearableCommandRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.risk.converter.RiskEventConverter;
@@ -33,29 +25,26 @@ import com.worksafe.backend.domain.worker.enums.WorkerStatus;
 import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private static final List<RiskStatus> ACTIVE_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
-    private static final Set<EquipmentType> REQUIRED_EQUIPMENT_TYPES =
-            Set.of(EquipmentType.HELMET, EquipmentType.VEST, EquipmentType.SHOES);
 
     private final RiskEventRepository riskEventRepository;
     private final SensorLogRepository sensorLogRepository;
     private final WorkerRepository workerRepository;
-    private final EquipmentRepository equipmentRepository;
     private final AlertRepository alertRepository;
     private final AlertRealtimeService alertRealtimeService;
-    private final WearableCommandRepository wearableCommandRepository;
 
     @Override
     public RiskLevel evaluateWorkerRisk(Long workerId) {
@@ -72,13 +61,10 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             riskLevel = max(riskLevel, evaluateMotionRiskLevel(motionLog));
         }
 
-        RiskLevel equipmentRiskLevel = evaluateEquipmentRiskLevel(workerId);
-        if (equipmentRiskLevel == RiskLevel.LV1) {
-            resolveEquipmentRiskIfRecovered(worker);
-        }
-        riskLevel = max(riskLevel, equipmentRiskLevel);
         for (RiskEvent activeRiskEvent : riskEventRepository.findByWorker_IdAndStatusInOrderByOccurredAtDesc(workerId, ACTIVE_STATUSES)) {
-            riskLevel = max(riskLevel, activeRiskEvent.getRiskLevel());
+            if (activeRiskEvent.getSourceType() != RiskSourceType.SENSOR) {
+                riskLevel = max(riskLevel, activeRiskEvent.getRiskLevel());
+            }
         }
 
         updateWorkerStatus(worker, riskLevel);
@@ -94,7 +80,11 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
         RiskType riskType = determineRiskType(sensorLog);
         RiskLevel riskLevel = determineRiskLevel(sensorLog);
+        sensorLog.applyAssessment(sensorLog.getWearStatus(), riskLevel);
         if (riskLevel == RiskLevel.LV1 || riskType == null) {
+            if (riskType != null) {
+                resolveSensorRiskIfRecovered(worker, riskType);
+            }
             evaluateWorkerRisk(worker.getId());
             return null;
         }
@@ -107,8 +97,16 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                     riskLevel,
                     buildDescription(sensorLog, riskType, riskLevel),
                     sensorLog.getLatitude(),
-                    sensorLog.getLongitude(),
-                    sensorLog.getMeasuredAt() == null ? LocalDateTime.now() : sensorLog.getMeasuredAt()
+                    sensorLog.getLongitude()
+            );
+            log.warn(
+                    "RISK_ACTIVE workerId={} eventId={} type={} currentLevel={} peakLevel={} detectedAt={}",
+                    worker.getId(),
+                    existing.getId(),
+                    riskType,
+                    riskLevel,
+                    existing.getRiskLevel(),
+                    existing.getOccurredAt()
             );
             updateWorkerStatus(worker, existing.getRiskLevel());
             return RiskEventConverter.toResponse(existing);
@@ -125,47 +123,22 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 .status(RiskStatus.OPEN)
                 .occurredAt(sensorLog.getMeasuredAt() == null ? LocalDateTime.now() : sensorLog.getMeasuredAt())
                 .build());
+        log.warn(
+                "RISK_DETECTED workerId={} eventId={} type={} level={} detectedAt={}",
+                worker.getId(),
+                saved.getId(),
+                riskType,
+                riskLevel,
+                saved.getOccurredAt()
+        );
         handleRiskEvent(saved);
         return RiskEventConverter.toResponse(saved);
     }
 
     @Override
     public RiskEventResponse evaluateByEquipmentStatus(Long workerId) {
-        Worker worker = getWorker(workerId);
-        RiskLevel riskLevel = evaluateEquipmentRiskLevel(workerId);
-        if (riskLevel == RiskLevel.LV1) {
-            resolveEquipmentRiskIfRecovered(worker);
-            updateWorkerStatus(worker, riskLevel);
-            return null;
-        }
-
-        RiskType riskType = RiskType.NO_EQUIPMENT;
-        RiskEvent existing = findActiveRiskEvent(workerId, riskType);
-        if (existing != null) {
-            updateActiveRiskEvent(
-                    existing,
-                    RiskSourceType.SENSOR,
-                    riskLevel,
-                    "Safety equipment is not fully worn.",
-                    existing.getLatitude(),
-                    existing.getLongitude(),
-                    LocalDateTime.now()
-            );
-            updateWorkerStatus(worker, existing.getRiskLevel());
-            return RiskEventConverter.toResponse(existing);
-        }
-
-        RiskEvent saved = riskEventRepository.save(RiskEvent.builder()
-                .worker(worker)
-                .sourceType(RiskSourceType.SENSOR)
-                .riskType(riskType)
-                .riskLevel(riskLevel)
-                .description("Safety equipment is not fully worn.")
-                .status(RiskStatus.OPEN)
-                .occurredAt(LocalDateTime.now())
-                .build());
-        handleRiskEvent(saved);
-        return RiskEventConverter.toResponse(saved);
+        evaluateWorkerRisk(workerId);
+        return null;
     }
 
     @Override
@@ -194,9 +167,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     @Override
     public void handleRiskEvent(RiskEvent riskEvent) {
         createAlertIfNeeded(riskEvent);
-        if (riskEvent.getRiskType() == RiskType.NO_EQUIPMENT) {
-            createBuzzerCommandIfNeeded(riskEvent);
-        }
+
         updateWorkerStatus(riskEvent.getWorker(), riskEvent.getRiskLevel());
     }
 
@@ -204,7 +175,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         return switch (sensorLog.getSensorType()) {
             case BIOMETRIC -> evaluateBiometricRiskLevel(sensorLog);
             case MOTION -> evaluateMotionRiskLevel(sensorLog);
-            case WEAR_STATUS -> sensorLog.getWearStatus() == WearStatus.NOT_WORN ? RiskLevel.LV2 : RiskLevel.LV1;
+            case WEAR_STATUS -> RiskLevel.LV1;
             case SOS -> RiskLevel.LV3;
             default -> RiskLevel.LV1;
         };
@@ -214,7 +185,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         return switch (sensorLog.getSensorType()) {
             case BIOMETRIC -> RiskType.BIOMETRIC_ABNORMAL;
             case MOTION -> RiskType.FALL_DETECTED;
-            case WEAR_STATUS -> sensorLog.getWearStatus() == WearStatus.NOT_WORN ? RiskType.NO_EQUIPMENT : null;
+            case WEAR_STATUS -> null;
             case SOS -> RiskType.SOS_REQUEST;
             default -> null;
         };
@@ -263,22 +234,18 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         double accelerationMagnitude = vectorMagnitude(sensorLog.getAccelX(), sensorLog.getAccelY(), sensorLog.getAccelZ());
         double maxTilt = maxAbs(sensorLog.getTiltX(), sensorLog.getTiltY(), sensorLog.getTiltZ());
         double impactAmount = sensorLog.getImpactAmount() == null ? 0.0 : sensorLog.getImpactAmount();
+        double angularVelocity = vectorMagnitude(sensorLog.getGyroX(), sensorLog.getGyroY(), sensorLog.getGyroZ());
 
-        if (accelerationMagnitude >= 2.5 || maxTilt >= 60.0 || impactAmount >= 3.0) {
+        if (accelerationMagnitude >= 2.5 || maxTilt >= 60.0 || impactAmount >= 3.0 || angularVelocity >= 8.0) {
             return RiskLevel.LV4;
         }
-        if (accelerationMagnitude >= 2.0 || maxTilt >= 45.0 || impactAmount >= 1.5) {
+        if (accelerationMagnitude >= 2.0 || maxTilt >= 45.0 || impactAmount >= 1.5 || angularVelocity >= 5.0) {
             return RiskLevel.LV3;
         }
+        if (accelerationMagnitude >= 1.5 || maxTilt >= 30.0 || impactAmount >= 1.0 || angularVelocity >= 3.0) {
+            return RiskLevel.LV2;
+        }
         return RiskLevel.LV1;
-    }
-
-    private RiskLevel evaluateEquipmentRiskLevel(Long workerId) {
-        List<Equipment> equipmentList = equipmentRepository.findByWorker_IdOrderByUpdatedAtDesc(workerId);
-        boolean allRequiredEquipmentWorn = REQUIRED_EQUIPMENT_TYPES.stream().allMatch(requiredType ->
-                equipmentList.stream().anyMatch(equipment ->
-                        equipment.getType() == requiredType && equipment.getWearStatus() == WearStatus.WORN));
-        return allRequiredEquipmentWorn ? RiskLevel.LV1 : RiskLevel.LV2;
     }
 
     private void createAlertIfNeeded(RiskEvent riskEvent) {
@@ -306,8 +273,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
             RiskLevel riskLevel,
             String description,
             Double latitude,
-            Double longitude,
-            LocalDateTime occurredAt
+            Double longitude
     ) {
         RiskLevel nextRiskLevel = max(riskEvent.getRiskLevel(), riskLevel);
         riskEvent.updateCurrentRisk(
@@ -316,59 +282,23 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 description,
                 latitude,
                 longitude,
-                occurredAt
+                riskEvent.getOccurredAt()
         );
     }
 
-    private void createBuzzerCommandIfNeeded(RiskEvent riskEvent) {
-        if (riskEvent.getRiskLevel().ordinal() < RiskLevel.LV2.ordinal() || riskEvent.getWorker() == null) {
-            return;
-        }
-
-        Equipment equipment = equipmentRepository
-                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(riskEvent.getWorker().getId(), EquipmentType.VEST)
-                .orElseGet(() -> equipmentRepository
-                        .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(riskEvent.getWorker().getId(), EquipmentType.SOS_BUTTON)
-                        .orElse(null));
-        if (equipment == null) {
-            return;
-        }
-
-        wearableCommandRepository.save(WearableCommand.builder()
-                .equipment(equipment)
-                .worker(riskEvent.getWorker())
-                .commandType(WearableCommandType.BUZZER_ON)
-                .commandStatus(WearableCommandStatus.REQUESTED)
-                .reason(riskEvent.getDescription())
-                .requestedAt(LocalDateTime.now())
-                .build());
-    }
-
-    private void resolveEquipmentRiskIfRecovered(Worker worker) {
-        List<RiskEvent> activeEquipmentRisks = riskEventRepository
-                .findByWorker_IdAndStatusInOrderByOccurredAtDesc(worker.getId(), ACTIVE_STATUSES)
-                .stream()
-                .filter(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
-                .toList();
-        if (activeEquipmentRisks.isEmpty()) {
-            return;
-        }
-        activeEquipmentRisks.forEach(event -> event.changeStatus(RiskStatus.RESOLVED));
-
-        Equipment vest = equipmentRepository
-                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.VEST)
-                .orElseGet(() -> equipmentRepository
-                        .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.SOS_BUTTON)
-                        .orElse(null));
-        if (vest != null) {
-            wearableCommandRepository.save(WearableCommand.builder()
-                    .equipment(vest)
-                    .worker(worker)
-                    .commandType(WearableCommandType.BUZZER_OFF)
-                    .commandStatus(WearableCommandStatus.REQUESTED)
-                    .reason("필수 안전장비가 모두 다시 착용되었습니다.")
-                    .requestedAt(LocalDateTime.now())
-                    .build());
+    private void resolveSensorRiskIfRecovered(Worker worker, RiskType riskType) {
+        RiskEvent activeRisk = findActiveRiskEvent(worker.getId(), riskType);
+        if (activeRisk != null && activeRisk.getSourceType() == RiskSourceType.SENSOR) {
+            activeRisk.changeStatus(RiskStatus.RESOLVED);
+            log.info(
+                    "RISK_RESOLVED workerId={} eventId={} type={} peakLevel={} detectedAt={} resolvedAt={}",
+                    worker.getId(),
+                    activeRisk.getId(),
+                    riskType,
+                    activeRisk.getRiskLevel(),
+                    activeRisk.getOccurredAt(),
+                    activeRisk.getResolvedAt()
+            );
         }
     }
 
