@@ -17,6 +17,7 @@ import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import com.worksafe.backend.domain.equipment.enums.WearableCommandType;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.domain.equipment.repository.WearableCommandRepository;
+import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
@@ -91,25 +92,25 @@ class MvpScenarioIntegrationTest {
         SafetyFixture fixture = saveSafetyFixture("adc");
 
         String valid = equipmentJson(fixture.worker(), fixture.helmet(), 4095);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(valid))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value("201"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("200"))
                 .andExpect(jsonPath("$.data.pressureValue").value(4095))
                 .andExpect(jsonPath("$.data.wearStatus").value("WORN"))
                 .andExpect(jsonPath("$.data.riskLevel").value("LV1"));
 
-        mockMvc.perform(post("/api/iot/equipment-status")
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(valid))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.wearStatus").value("WORN"));
 
         String invalid = equipmentJson(fixture.worker(), fixture.helmet(), 4096);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalid))
@@ -117,7 +118,7 @@ class MvpScenarioIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         String mismatchedEquipment = equipmentJson(fixture.worker(), fixture.vest(), 2000);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mismatchedEquipment))
@@ -126,57 +127,60 @@ class MvpScenarioIntegrationTest {
     }
 
     @Test
-    void oneOrMoreMissingRequiredEquipmentAlwaysStaysLv2AndNeverDispatchesDrone() {
-        SafetyFixture fixture = saveSafetyFixture("missing");
-        saveReadyDrone("missing");
+    void equipmentWearStatusIsUpdatedButExcludedFromRiskEvaluation() {
+        SafetyFixture fixture = saveSafetyFixture("wear-excluded");
+        saveReadyDrone("wear-excluded");
 
         SensorLogResponse first = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.helmet(), 0, 1));
         SensorLogResponse second = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 0, 2));
         fixture.vest().updateWearStatus(WearStatus.NOT_WORN, LocalDateTime.of(2026, 7, 24, 10, 2, 3));
         SensorLogResponse third = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.helmet(), 0, 3));
 
-        assertThat(first.riskLevel()).isEqualTo(RiskLevel.LV2);
-        assertThat(second.riskLevel()).isEqualTo(RiskLevel.LV2);
-        assertThat(third.riskLevel()).isEqualTo(RiskLevel.LV2);
+        assertThat(first.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(second.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(third.riskLevel()).isEqualTo(RiskLevel.LV1);
         assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
                 .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
-                .extracting(RiskEvent::getRiskLevel)
-                .containsOnly(RiskLevel.LV2);
+                .isEmpty();
+        assertThat(alertRepository.count()).isZero();
+        assertThat(wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId())).isEmpty();
         assertThat(droneDispatchRepository.count()).isZero();
-    }
-
-    @Test
-    void lv2CreatesOneManagerAlertAndTargetsVestBuzzer() {
-        SafetyFixture fixture = saveSafetyFixture("lv2");
-
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 20, 1));
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 30, 2));
-
-        List<WearableCommand> commands = wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId());
-        assertThat(alertRepository.count()).isEqualTo(1);
-        assertThat(commands).hasSize(1);
-        assertThat(commands.getFirst().getCommandType()).isEqualTo(WearableCommandType.BUZZER_ON);
-        assertThat(commands.getFirst().getEquipment().getType()).isEqualTo(EquipmentType.VEST);
-    }
-
-    @Test
-    void restoringAllRequiredEquipmentResolvesLv2AndQueuesBuzzerOff() {
-        SafetyFixture fixture = saveSafetyFixture("restore");
-
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 20, 1));
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 4095, 2));
-
-        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
-                .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
-                .extracting(RiskEvent::getStatus)
-                .containsOnly(RiskStatus.RESOLVED);
-        assertThat(wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId()))
-                .extracting(WearableCommand::getCommandType)
-                .contains(WearableCommandType.BUZZER_ON, WearableCommandType.BUZZER_OFF);
         assertThat(workerRepository.findById(fixture.worker().getId()).orElseThrow().getStatus())
                 .isEqualTo(WorkerStatus.NORMAL);
     }
+    @Test
+    void sensorRiskIsRecordedOnceResolvedOnRecoveryAndRecordedAgainOnRecurrence() {
+        Worker worker = saveWorker("sensor-risk");
+        LocalDateTime detectedAt = LocalDateTime.of(2026, 10, 1, 10, 0);
 
+        SensorLogResponse detected = iotService.biometrics(
+                new BiometricRequest(worker.getId(), null, 150, 98.0, 36.5, detectedAt)
+        );
+        SensorLogResponse active = iotService.biometrics(
+                new BiometricRequest(worker.getId(), null, 130, 98.0, 36.5, detectedAt.plusSeconds(10))
+        );
+
+        List<RiskEvent> firstOccurrence = riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(worker.getId());
+        assertThat(detected.riskLevel()).isEqualTo(RiskLevel.LV4);
+        assertThat(active.riskLevel()).isEqualTo(RiskLevel.LV3);
+        assertThat(firstOccurrence).hasSize(1);
+        assertThat(firstOccurrence.getFirst().getRiskLevel()).isEqualTo(RiskLevel.LV4);
+        assertThat(firstOccurrence.getFirst().getOccurredAt()).isEqualTo(detectedAt);
+        assertThat(firstOccurrence.getFirst().getStatus()).isEqualTo(RiskStatus.OPEN);
+
+        SensorLogResponse recovered = iotService.biometrics(
+                new BiometricRequest(worker.getId(), null, 80, 98.0, 36.5, detectedAt.plusSeconds(20))
+        );
+        assertThat(recovered.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(firstOccurrence.getFirst().getStatus()).isEqualTo(RiskStatus.RESOLVED);
+
+        iotService.biometrics(
+                new BiometricRequest(worker.getId(), null, 145, 98.0, 36.5, detectedAt.plusSeconds(30))
+        );
+        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(worker.getId()))
+                .extracting(RiskEvent::getStatus)
+                .containsExactly(RiskStatus.OPEN, RiskStatus.RESOLVED);
+    }
     @Test
     void sosZeroDoesNothingAndSosOneCreatesOnlyLv3ManagerAlertBeforeApproval() {
         SafetyFixture fixture = saveSafetyFixture("sos");

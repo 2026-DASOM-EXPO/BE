@@ -234,12 +234,12 @@ Base Path: `/api/sensor-logs`
 | bpm | Integer | N | 심박수 |
 | spo2 | Double | N | 산소포화도 |
 | bodyTemperature | Double | N | 체온 |
-| accelerationX | Double | N | 가속도 X |
-| accelerationY | Double | N | 가속도 Y |
-| accelerationZ | Double | N | 가속도 Z |
-| gyroX | Double | N | 자이로 X |
-| gyroY | Double | N | 자이로 Y |
-| gyroZ | Double | N | 자이로 Z |
+| accelX | Double | N | 가속도 X (m/s²) |
+| accelY | Double | N | 가속도 Y (m/s²) |
+| accelZ | Double | N | 가속도 Z (m/s²) |
+| gyroX | Double | N | 각속도 X (rad/s) |
+| gyroY | Double | N | 각속도 Y (rad/s) |
+| gyroZ | Double | N | 각속도 Z (rad/s) |
 | tiltX | Double | N | 기울기 X |
 | tiltY | Double | N | 기울기 Y |
 | tiltZ | Double | N | 기울기 Z |
@@ -371,9 +371,22 @@ Base Path: `/api/iot`
 | bodyTemperature | Double | N | 체온 |
 | measuredAt | LocalDateTime | N | 측정 시각 |
 
+동일 작업자의 생체 데이터는 최신 상태 한 건을 계속 갱신합니다. 더 오래된 `measuredAt` 샘플은 현재 상태를 덮어쓰지 않습니다.
+
+#### 심박수 현재 상태 갱신
+
+- `PATCH /heart`
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| workerId | Long | Y | 작업자 ID |
+| equipmentId | Long | N | 장비 ID |
+| bpm | Integer | Y | 심박수 |
+| measuredAt | LocalDateTime | N | 측정 시각 |
+
 ### 5.3 IMU 데이터 수집
 
-- `POST /imu`
+- `PATCH /imu`
 
 요청: `ImuRequest`  
 응답: `ApiResponse<SensorLogResponse>`
@@ -384,12 +397,12 @@ Base Path: `/api/iot`
 |---|---|---:|---|
 | workerId | Long | Y | 작업자 ID |
 | equipmentId | Long | N | 장비 ID |
-| accelerationX | Double | N | 가속도 X |
-| accelerationY | Double | N | 가속도 Y |
-| accelerationZ | Double | N | 가속도 Z |
-| gyroX | Double | N | 자이로 X |
-| gyroY | Double | N | 자이로 Y |
-| gyroZ | Double | N | 자이로 Z |
+| accelX | Double | N | 가속도 X (m/s²) |
+| accelY | Double | N | 가속도 Y (m/s²) |
+| accelZ | Double | N | 가속도 Z (m/s²) |
+| gyroX | Double | N | 각속도 X (rad/s) |
+| gyroY | Double | N | 각속도 Y (rad/s) |
+| gyroZ | Double | N | 각속도 Z (rad/s) |
 | tiltX | Double | N | 기울기 X |
 | tiltY | Double | N | 기울기 Y |
 | tiltZ | Double | N | 기울기 Z |
@@ -398,7 +411,7 @@ Base Path: `/api/iot`
 
 ### 5.4 GPS 위치 수집
 
-- `POST /gps`
+- `PATCH /gps`
 
 요청: `GpsRequest`  
 응답: `ApiResponse<SensorLogResponse>`
@@ -416,7 +429,7 @@ Base Path: `/api/iot`
 
 ### 5.5 안전장비 착용 상태 변경
 
-- `POST /equipment-status`
+- `PATCH /equipment-status`
 
 요청: `EquipmentStatusRequest`  
 응답: `ApiResponse<SensorLogResponse>`
@@ -433,7 +446,7 @@ Base Path: `/api/iot`
 
 ### 5.6 SOS 긴급 신고
 
-- `POST /sos`
+- `PATCH /sos`
 
 요청: `SosRequest`  
 응답: `ApiResponse<RiskEventResponse>`
@@ -1329,6 +1342,8 @@ Base Path: `/api/dashboard`
 - `LV2`
 - `LV3`
 - `LV4`
+
+센서 최신값은 센서 유형별 한 건으로 유지합니다. 정상에서 LV2 이상으로 전환되면 위험 이벤트를 기록하고, 위험이 지속되는 동안에는 같은 이벤트의 최고 단계와 최초 감지 시각을 보존합니다. 정상 복귀 시 `RESOLVED`로 종료하며 이후 재발하면 새 이벤트를 생성합니다. 안전장비 착용 여부는 현재 위험 단계 계산에서 제외합니다.
 
 #### RiskSourceType
 
