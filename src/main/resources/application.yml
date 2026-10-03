@@ -29,6 +29,13 @@ server:
 
 app:
   drone:
+    jetson:
+      enabled: ${JETSON_COMMAND_ENABLED:false}
+      base-url: ${JETSON_BASE_URL:}
+      command-path: ${JETSON_COMMAND_PATH:/api/v1/drone/commands}
+      connect-timeout-millis: ${JETSON_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-millis: ${JETSON_READ_TIMEOUT_MS:3000}
+      auth-token: ${JETSON_AUTH_TOKEN:}
     streaming:
       enabled: ${DRONE_STREAM_ENABLED:true}
       ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
