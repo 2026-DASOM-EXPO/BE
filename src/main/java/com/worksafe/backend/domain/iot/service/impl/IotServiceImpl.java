@@ -9,6 +9,7 @@ import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import com.worksafe.backend.domain.drone.entity.DroneDispatch;
 import com.worksafe.backend.domain.drone.converter.DroneConverter;
 import com.worksafe.backend.domain.drone.dto.response.DroneDispatchResponse;
+import com.worksafe.backend.domain.drone.dto.response.DroneResponse;
 import com.worksafe.backend.domain.drone.enums.DroneDispatchStatus;
 import com.worksafe.backend.domain.drone.enums.DroneStatus;
 import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
@@ -21,6 +22,7 @@ import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
 import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
+import com.worksafe.backend.domain.iot.dto.request.DroneGpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
@@ -101,6 +103,12 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse heart(HeartRequest request) {
         Worker worker = getWorker(request.workerId());
+        Equipment vest = equipmentRepository
+                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.VEST)
+                .orElse(null);
+        if (vest != null) {
+            vest.updateWearStatus(WearStatus.WORN, LocalDateTime.now());
+        }
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
@@ -117,6 +125,9 @@ public class IotServiceImpl implements IotService {
         saved.applyAssessment(null, riskLevel);
         SensorLogResponse response = SensorLogConverter.toResponse(saved);
         alertRealtimeService.publish("sensor", response);
+        if (vest != null) {
+            alertRealtimeService.publish("equipment", EquipmentConverter.toResponse(vest));
+        }
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
         return response;
     }
@@ -166,6 +177,16 @@ public class IotServiceImpl implements IotService {
     }
 
     @Override
+    public DroneResponse droneGps(DroneGpsRequest request) {
+        var drone = droneRepository.findById(request.droneId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.DRONE_NOT_FOUND));
+        drone.updateLocation(request.latitude(), request.longitude());
+        DroneResponse response = DroneConverter.toResponse(drone);
+        alertRealtimeService.publish("drone", response);
+        return response;
+    }
+
+    @Override
     public SensorLogResponse equipmentStatus(EquipmentStatusRequest request) {
         Worker worker = getWorker(request.workerId());
         Equipment equipment = getEquipment(request.equipmentId());
@@ -202,20 +223,12 @@ public class IotServiceImpl implements IotService {
     @Override
     public SosResponse sos(SosRequest request) {
         Worker worker = getWorker(request.workerId());
-        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
-        ensureEquipmentMatchesWorker(worker, equipment);
-        if (equipment != null
-                && equipment.getType() != EquipmentType.VEST
-                && equipment.getType() != EquipmentType.SOS_BUTTON) {
-            throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
-        }
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
                 SensorType.SOS,
                 buildSensorLog(
                         worker,
-                        equipment,
                         request
                 )
         );
@@ -249,9 +262,9 @@ public class IotServiceImpl implements IotService {
                 RiskSourceType.SOS,
                 RiskType.SOS_REQUEST,
                 RiskLevel.LV3,
-                request.message(),
-                request.latitude(),
-                request.longitude(),
+                "SOS 버튼이 눌렸습니다.",
+                worker.getCurrentLatitude(),
+                worker.getCurrentLongitude(),
                 LocalDateTime.now()
         ));
         DroneDispatch dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.id());
@@ -440,14 +453,13 @@ public class IotServiceImpl implements IotService {
                 .build();
     }
 
-    private SensorLog buildSensorLog(Worker worker, Equipment equipment, SosRequest request) {
+    private SensorLog buildSensorLog(Worker worker, SosRequest request) {
         return SensorLog.builder()
                 .worker(worker)
-                .equipment(equipment)
                 .sensorType(SensorType.SOS)
-                .latitude(request.latitude())
-                .longitude(request.longitude())
-                .rawPayload(request.message())
+                .latitude(worker.getCurrentLatitude())
+                .longitude(worker.getCurrentLongitude())
+                .rawPayload("{\"buttonValue\":" + request.buttonValue() + "}")
                 .sosPressed(request.buttonValue() == 1)
                 .measuredAt(LocalDateTime.now())
                 .build();
