@@ -51,7 +51,6 @@ import com.worksafe.backend.domain.worker.repository.WorkerRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -74,9 +73,6 @@ public class IotServiceImpl implements IotService {
     private final DroneRepository droneRepository;
     private final AlertRepository alertRepository;
     private final AlertRealtimeService alertRealtimeService;
-
-    @Value("${app.sensor.fsr-worn-threshold:1000}")
-    private int fsrWornThreshold;
 
     @Override
     public SensorLogResponse biometrics(BiometricRequest request) {
@@ -178,9 +174,7 @@ public class IotServiceImpl implements IotService {
             throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
-        WearStatus detectedWearStatus = request.pressureValue() >= fsrWornThreshold
-                ? WearStatus.WORN
-                : WearStatus.NOT_WORN;
+        WearStatus detectedWearStatus = request.wearStatus();
         equipment.updateWearStatus(detectedWearStatus, LocalDateTime.now());
 
         SensorLog saved = saveOrUpdateCurrentByEquipment(
@@ -440,7 +434,6 @@ public class IotServiceImpl implements IotService {
                 .worker(worker)
                 .equipment(equipment)
                 .sensorType(SensorType.WEAR_STATUS)
-                .pressureValue(request.pressureValue())
                 .wearStatus(detectedWearStatus)
                 .sosPressed(false)
                 .measuredAt(LocalDateTime.now())

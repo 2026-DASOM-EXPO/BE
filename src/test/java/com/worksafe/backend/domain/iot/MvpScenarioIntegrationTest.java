@@ -87,37 +87,41 @@ class MvpScenarioIntegrationTest {
     private DroneVideoRepository droneVideoRepository;
 
     @Test
-    void adcRangeIsZeroTo4095AndRepeatedSamplesAreAccepted() throws Exception {
+    void wearStatusIsRequiredAndRepeatedSamplesAreAccepted() throws Exception {
         SafetyFixture fixture = saveSafetyFixture("adc");
 
-        String valid = equipmentJson(fixture.worker(), fixture.helmet(), 4095);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        String valid = equipmentJson(fixture.worker(), fixture.helmet(), "WORN");
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(valid))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value("201"))
-                .andExpect(jsonPath("$.data.pressureValue").value(4095))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("200"))
                 .andExpect(jsonPath("$.data.wearStatus").value("WORN"))
                 .andExpect(jsonPath("$.data.riskLevel").value("LV1"));
 
-        mockMvc.perform(post("/api/iot/equipment-status")
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(valid))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.wearStatus").value("WORN"));
 
-        String invalid = equipmentJson(fixture.worker(), fixture.helmet(), 4096);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        String invalid = """
+                {
+                  "workerId": %d,
+                  "equipmentId": %d
+                }
+                """.formatted(fixture.worker().getId(), fixture.helmet().getId());
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalid))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        String mismatchedEquipment = equipmentJson(fixture.worker(), fixture.vest(), 2000);
-        mockMvc.perform(post("/api/iot/equipment-status")
+        String mismatchedEquipment = equipmentJson(fixture.worker(), fixture.vest(), "WORN");
+        mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mismatchedEquipment))
@@ -130,10 +134,10 @@ class MvpScenarioIntegrationTest {
         SafetyFixture fixture = saveSafetyFixture("missing");
         saveReadyDrone("missing");
 
-        SensorLogResponse first = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.helmet(), 0, 1));
-        SensorLogResponse second = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 0, 2));
+        SensorLogResponse first = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
+        SensorLogResponse second = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
         fixture.vest().updateWearStatus(WearStatus.NOT_WORN, LocalDateTime.of(2026, 7, 24, 10, 2, 3));
-        SensorLogResponse third = iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.helmet(), 0, 3));
+        SensorLogResponse third = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
 
         assertThat(first.riskLevel()).isEqualTo(RiskLevel.LV2);
         assertThat(second.riskLevel()).isEqualTo(RiskLevel.LV2);
@@ -149,8 +153,8 @@ class MvpScenarioIntegrationTest {
     void lv2CreatesOneManagerAlertAndTargetsVestBuzzer() {
         SafetyFixture fixture = saveSafetyFixture("lv2");
 
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 20, 1));
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 30, 2));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
 
         List<WearableCommand> commands = wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId());
         assertThat(alertRepository.count()).isEqualTo(1);
@@ -163,8 +167,8 @@ class MvpScenarioIntegrationTest {
     void restoringAllRequiredEquipmentResolvesLv2AndQueuesBuzzerOff() {
         SafetyFixture fixture = saveSafetyFixture("restore");
 
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 20, 1));
-        iotService.equipmentStatus(pressureRequest(fixture.worker(), fixture.shoes(), 4095, 2));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.WORN));
 
         assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
                 .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
@@ -246,22 +250,21 @@ class MvpScenarioIntegrationTest {
         assertThat(videos.getFirst().getHeight()).isEqualTo(720);
     }
 
-    private String equipmentJson(Worker worker, Equipment equipment, int pressureValue) {
+    private String equipmentJson(Worker worker, Equipment equipment, String wearStatus) {
         return """
                 {
                   "workerId": %d,
                   "equipmentId": %d,
-                  "pressureValue": %d
+                  "wearStatus": "%s"
                 }
-                """.formatted(worker.getId(), equipment.getId(), pressureValue);
+                """.formatted(worker.getId(), equipment.getId(), wearStatus);
     }
 
-    private EquipmentStatusRequest pressureRequest(Worker worker, Equipment equipment, int pressure, int second) {
+    private EquipmentStatusRequest wearRequest(Worker worker, Equipment equipment, WearStatus wearStatus) {
         return new EquipmentStatusRequest(
                 worker.getId(),
                 equipment.getId(),
-                null,
-                pressure
+                wearStatus
         );
     }
 

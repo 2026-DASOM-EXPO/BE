@@ -428,7 +428,6 @@ Base Path: `/api/iot`
 | workerId | Long | Y | 작업자 ID |
 | equipmentId | Long | Y | 장비 ID |
 | wearStatus | WearStatus | Y | 착용 상태 |
-| pressureValue | Double | N | 압력 값 |
 | measuredAt | LocalDateTime | N | 측정 시각 |
 
 ### 5.6 SOS 긴급 신고
