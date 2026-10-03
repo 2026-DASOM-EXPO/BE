@@ -55,6 +55,7 @@ import java.util.List;
 public class IotServiceImpl implements IotService {
 
     private static final List<RiskStatus> ACTIVE_RISK_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
+    private static final String SOS_MESSAGE = "작업자 SOS 긴급 요청";
 
     private final SensorLogRepository sensorLogRepository;
     private final WorkerRepository workerRepository;
@@ -176,16 +177,12 @@ public class IotServiceImpl implements IotService {
     @Override
     public RiskEventResponse sos(SosRequest request) {
         Worker worker = getWorker(request.workerId());
-        Equipment equipment = getEquipmentIfPresent(request.equipmentId());
-        ensureEquipmentMatchesWorker(worker, equipment);
-
         if (riskEventRepository.existsByWorker_IdAndRiskTypeAndStatusIn(worker.getId(), RiskType.SOS_REQUEST, ACTIVE_RISK_STATUSES)) {
             throw new BusinessException(ErrorCode.DUPLICATE_SOS_REQUEST);
         }
 
         sensorLogRepository.save(buildSensorLog(
                 worker,
-                equipment,
                 request
         ));
 
@@ -194,7 +191,7 @@ public class IotServiceImpl implements IotService {
                 RiskSourceType.SOS,
                 RiskType.SOS_REQUEST,
                 RiskLevel.LV4,
-                request.message(),
+                SOS_MESSAGE,
                 request.latitude(),
                 request.longitude(),
                 request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt()
@@ -331,14 +328,13 @@ public class IotServiceImpl implements IotService {
                 .build();
     }
 
-    private SensorLog buildSensorLog(Worker worker, Equipment equipment, SosRequest request) {
+    private SensorLog buildSensorLog(Worker worker, SosRequest request) {
         return SensorLog.builder()
                 .worker(worker)
-                .equipment(equipment)
                 .sensorType(SensorType.SOS)
                 .latitude(request.latitude())
                 .longitude(request.longitude())
-                .rawPayload(request.message())
+                .rawPayload(SOS_MESSAGE)
                 .sosPressed(true)
                 .measuredAt(request.measuredAt() == null ? LocalDateTime.now() : request.measuredAt())
                 .build();
