@@ -2,12 +2,14 @@ package com.worksafe.backend.domain.iot.controller;
 
 import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
 import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
+import com.worksafe.backend.domain.iot.dto.request.DroneGpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.HeartRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
+import com.worksafe.backend.domain.drone.dto.response.DroneResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 import com.worksafe.backend.global.common.response.ApiResponse;
@@ -51,6 +53,12 @@ public class IotController {
     @Operation(summary = "GPS 현재 위치 갱신")
     public ApiResponse<SensorLogResponse> gps(@Valid @RequestBody GpsRequest request) {
         return ApiResponse.success(iotService.gps(request));
+    }
+
+    @PatchMapping("/drone-gps")
+    @Operation(summary = "드론 GPS 현재 위치 갱신")
+    public ApiResponse<DroneResponse> droneGps(@Valid @RequestBody DroneGpsRequest request) {
+        return ApiResponse.success(iotService.droneGps(request));
     }
 
     @PatchMapping("/equipment-status")

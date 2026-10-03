@@ -107,4 +107,9 @@ public class Drone extends BaseEntity {
     public void changeStatus(DroneStatus status) {
         this.status = status;
     }
+
+    public void updateLocation(Double latitude, Double longitude) {
+        this.currentLatitude = latitude;
+        this.currentLongitude = longitude;
+    }
 }

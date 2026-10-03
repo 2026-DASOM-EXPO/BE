@@ -2,12 +2,14 @@ package com.worksafe.backend.domain.iot.service;
 
 import com.worksafe.backend.domain.iot.dto.request.BiometricRequest;
 import com.worksafe.backend.domain.iot.dto.request.DroneObstacleRequest;
+import com.worksafe.backend.domain.iot.dto.request.DroneGpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
 import com.worksafe.backend.domain.iot.dto.request.GpsRequest;
 import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.HeartRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
+import com.worksafe.backend.domain.drone.dto.response.DroneResponse;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 
 public interface IotService {
@@ -19,6 +21,8 @@ public interface IotService {
     SensorLogResponse imu(ImuRequest request);
 
     SensorLogResponse gps(GpsRequest request);
+
+    DroneResponse droneGps(DroneGpsRequest request);
 
     SensorLogResponse equipmentStatus(EquipmentStatusRequest request);
 
