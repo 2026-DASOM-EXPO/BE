@@ -75,8 +75,9 @@ public class RiskServiceImpl implements RiskService {
     public RiskEventResponse updateStatus(Long riskEventId, RiskEventStatusUpdateRequest request) {
         RiskEvent riskEvent = getRiskEvent(riskEventId);
         riskEvent.changeStatus(request.status());
-        if (request.status() == RiskStatus.PROCESSING && riskEvent.getRiskType() == com.worksafe.backend.domain.risk.enums.RiskType.SOS_REQUEST) {
-            startSosVideo(riskEvent);
+        if (request.status() == RiskStatus.PROCESSING
+                && riskEvent.getRiskLevel().ordinal() >= RiskLevel.LV3.ordinal()) {
+            startRiskVideo(riskEvent);
         }
         if (riskEvent.getWorker() != null) {
             riskEvaluationService.evaluateWorkerRisk(riskEvent.getWorker().getId());
@@ -119,7 +120,7 @@ public class RiskServiceImpl implements RiskService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RISK_EVENT_NOT_FOUND));
     }
 
-    private void startSosVideo(RiskEvent riskEvent) {
+    private void startRiskVideo(RiskEvent riskEvent) {
         var dispatch = droneDispatchRepository.findFirstByRiskEvent_IdOrderByCreatedAtDesc(riskEvent.getId());
         if (dispatch == null) {
             var drone = droneRepository.findFirstByStatus(DroneStatus.READY)
@@ -128,7 +129,7 @@ public class RiskServiceImpl implements RiskService {
                     riskEvent.getId(),
                     riskEvent.getLatitude(),
                     riskEvent.getLongitude(),
-                    "관리자 확인 SOS 수동 출동"
+                    "관리자 확인 위험 수동 출동"
             ));
             return;
         }
@@ -138,7 +139,7 @@ public class RiskServiceImpl implements RiskService {
                 .orElseGet(() -> droneVideoRepository.save(DroneVideo.builder()
                         .drone(dispatch.getDrone())
                         .dispatch(dispatch)
-                        .title("SOS 현장 영상")
+                        .title("위험 현장 영상")
                         .description("관리자 확인 후 시작된 720p 현장 영상")
                         .streamUrl(playlistUrl)
                         .protocol(VideoProtocol.HLS)

@@ -62,7 +62,7 @@ public class IotController {
     }
 
     @PatchMapping("/equipment-status")
-    @Operation(summary = "안전장비 착용 상태 변경")
+    @Operation(summary = "안전장비 착용 상태 변경(안전조끼는 조도값으로 판정)")
     public ApiResponse<SensorLogResponse> equipmentStatus(@Valid @RequestBody EquipmentStatusRequest request) {
         return ApiResponse.success(iotService.equipmentStatus(request));
     }

@@ -120,7 +120,7 @@ class MvpScenarioIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
-        String mismatchedEquipment = equipmentJson(fixture.worker(), fixture.vest(), "WORN");
+        String mismatchedEquipment = equipmentJson(fixture.worker(), fixture.shoes(), "WORN");
         mockMvc.perform(patch("/api/iot/equipment-status")
                         .with(user("admin").roles("ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -135,7 +135,7 @@ class MvpScenarioIntegrationTest {
         saveReadyDrone("missing");
 
         SensorLogResponse first = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
-        SensorLogResponse second = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
+        SensorLogResponse second = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
         fixture.vest().updateWearStatus(WearStatus.NOT_WORN, LocalDateTime.of(2026, 7, 24, 10, 2, 3));
         SensorLogResponse third = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
 
@@ -153,8 +153,8 @@ class MvpScenarioIntegrationTest {
     void lv2CreatesOneManagerAlertAndTargetsVestBuzzer() {
         SafetyFixture fixture = saveSafetyFixture("lv2");
 
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
 
         List<WearableCommand> commands = wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId());
         assertThat(alertRepository.count()).isEqualTo(1);
@@ -167,8 +167,8 @@ class MvpScenarioIntegrationTest {
     void restoringAllRequiredEquipmentResolvesLv2AndQueuesBuzzerOff() {
         SafetyFixture fixture = saveSafetyFixture("restore");
 
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.NOT_WORN));
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.shoes(), WearStatus.WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.WORN));
 
         assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
                 .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
@@ -271,11 +271,7 @@ class MvpScenarioIntegrationTest {
     private SosRequest sos(SafetyFixture fixture, int buttonValue, int second) {
         return new SosRequest(
                 fixture.worker().getId(),
-                fixture.vest().getId(),
-                buttonValue,
-                37.4979,
-                127.0276,
-                "SOS 통합 검증"
+                buttonValue
         );
     }
 
