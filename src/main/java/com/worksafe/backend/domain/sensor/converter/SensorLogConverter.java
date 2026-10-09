@@ -36,7 +36,7 @@ public final class SensorLogConverter {
                 .latitude(request.latitude())
                 .longitude(request.longitude())
                 .speed(request.speed())
-                .pressureValue(request.pressureValue())
+                .lightValue(request.lightValue())
                 .lidarFrontLeft(request.lidarFrontLeft())
                 .lidarFrontRight(request.lidarFrontRight())
                 .lidarBackLeft(request.lidarBackLeft())
@@ -74,7 +74,7 @@ public final class SensorLogConverter {
                 sensorLog.getLatitude(),
                 sensorLog.getLongitude(),
                 sensorLog.getSpeed(),
-                sensorLog.getPressureValue(),
+                sensorLog.getLightValue(),
                 sensorLog.getLidarFrontLeft(),
                 sensorLog.getLidarFrontRight(),
                 sensorLog.getLidarBackLeft(),

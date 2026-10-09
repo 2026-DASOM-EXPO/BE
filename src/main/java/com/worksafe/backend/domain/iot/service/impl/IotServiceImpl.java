@@ -64,6 +64,7 @@ public class IotServiceImpl implements IotService {
 
     private static final List<RiskStatus> ACTIVE_RISK_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
     private static final double GRAVITY_MS2 = 9.80665;
+    private static final int VEST_LIGHT_WORN_THRESHOLD = 1000;
 
     private final SensorLogRepository sensorLogRepository;
     private final WorkerRepository workerRepository;
@@ -191,11 +192,16 @@ public class IotServiceImpl implements IotService {
         Worker worker = getWorker(request.workerId());
         Equipment equipment = getEquipment(request.equipmentId());
         ensureEquipmentMatchesWorker(worker, equipment);
-        if (equipment.getType() != EquipmentType.HELMET && equipment.getType() != EquipmentType.SHOES) {
+        if (equipment.getType() != EquipmentType.HELMET && equipment.getType() != EquipmentType.VEST) {
             throw new BusinessException(ErrorCode.INVALID_SENSOR_EQUIPMENT_TYPE);
         }
 
-        WearStatus detectedWearStatus = request.wearStatus();
+        WearStatus detectedWearStatus = equipment.getType() == EquipmentType.VEST && request.lightValue() != null
+                ? detectVestWearStatus(request.lightValue())
+                : request.wearStatus();
+        if (detectedWearStatus == null) {
+            throw new BusinessException(ErrorCode.MISSING_REQUIRED_FIELD);
+        }
         equipment.updateWearStatus(detectedWearStatus, LocalDateTime.now());
 
         SensorLog saved = saveOrUpdateCurrentByEquipment(
@@ -425,6 +431,11 @@ public class IotServiceImpl implements IotService {
         return value / GRAVITY_MS2;
     }
 
+    private WearStatus detectVestWearStatus(Integer lightValue) {
+        // 조끼 안쪽이 어두워지는 조도값을 착용으로 판단합니다. 기준값은 0~4095 ADC입니다.
+        return lightValue <= VEST_LIGHT_WORN_THRESHOLD ? WearStatus.WORN : WearStatus.NOT_WORN;
+    }
+
     private SensorLog buildSensorLog(Worker worker, Equipment equipment, GpsRequest request) {
         return SensorLog.builder()
                 .worker(worker)
@@ -448,6 +459,7 @@ public class IotServiceImpl implements IotService {
                 .equipment(equipment)
                 .sensorType(SensorType.WEAR_STATUS)
                 .wearStatus(detectedWearStatus)
+                .lightValue(request.lightValue())
                 .sosPressed(false)
                 .measuredAt(LocalDateTime.now())
                 .build();

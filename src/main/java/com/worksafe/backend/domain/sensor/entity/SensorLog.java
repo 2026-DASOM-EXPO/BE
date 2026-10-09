@@ -58,7 +58,7 @@ public class SensorLog extends BaseEntity {
     private Double latitude;
     private Double longitude;
     private Double speed;
-    private Integer pressureValue;
+    private Integer lightValue;
     private Double lidarFrontLeft;
     private Double lidarFrontRight;
     private Double lidarBackLeft;
@@ -103,7 +103,7 @@ public class SensorLog extends BaseEntity {
             Double latitude,
             Double longitude,
             Double speed,
-            Integer pressureValue,
+            Integer lightValue,
             Double lidarFrontLeft,
             Double lidarFrontRight,
             Double lidarBackLeft,
@@ -136,7 +136,7 @@ public class SensorLog extends BaseEntity {
         this.latitude = latitude;
         this.longitude = longitude;
         this.speed = speed;
-        this.pressureValue = pressureValue;
+        this.lightValue = lightValue;
         this.lidarFrontLeft = lidarFrontLeft;
         this.lidarFrontRight = lidarFrontRight;
         this.lidarBackLeft = lidarBackLeft;
@@ -176,7 +176,7 @@ public class SensorLog extends BaseEntity {
         this.latitude = sensorLog.latitude;
         this.longitude = sensorLog.longitude;
         this.speed = sensorLog.speed;
-        this.pressureValue = sensorLog.pressureValue;
+        this.lightValue = sensorLog.lightValue;
         this.lidarFrontLeft = sensorLog.lidarFrontLeft;
         this.lidarFrontRight = sensorLog.lidarFrontRight;
         this.lidarBackLeft = sensorLog.lidarBackLeft;

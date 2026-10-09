@@ -47,7 +47,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
     private static final List<RiskStatus> ACTIVE_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
     private static final Set<EquipmentType> REQUIRED_EQUIPMENT_TYPES =
-            Set.of(EquipmentType.HELMET, EquipmentType.VEST, EquipmentType.SHOES);
+            Set.of(EquipmentType.HELMET, EquipmentType.VEST);
 
     private final RiskEventRepository riskEventRepository;
     private final SensorLogRepository sensorLogRepository;
@@ -60,23 +60,21 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     @Override
     public RiskLevel evaluateWorkerRisk(Long workerId) {
         Worker worker = getWorker(workerId);
-        RiskLevel riskLevel = RiskLevel.LV1;
-
         SensorLog biometricLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.BIOMETRIC);
-        if (biometricLog != null) {
-            riskLevel = max(riskLevel, evaluateBiometricRiskLevel(biometricLog));
-        }
-
         SensorLog motionLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.MOTION);
-        if (motionLog != null) {
-            riskLevel = max(riskLevel, evaluateMotionRiskLevel(motionLog));
-        }
-
         RiskLevel equipmentRiskLevel = evaluateEquipmentRiskLevel(workerId);
         if (equipmentRiskLevel == RiskLevel.LV1) {
             resolveEquipmentRiskIfRecovered(worker);
         }
-        riskLevel = max(riskLevel, equipmentRiskLevel);
+
+        boolean biometricAbnormal = biometricLog != null && isBiometricAbnormal(biometricLog);
+        boolean motionAbnormal = motionLog != null && isMotionAbnormal(motionLog);
+        RiskLevel riskLevel = biometricAbnormal && motionAbnormal
+                ? RiskLevel.LV3
+                : (biometricAbnormal || motionAbnormal || equipmentRiskLevel == RiskLevel.LV2
+                ? RiskLevel.LV2
+                : RiskLevel.LV1);
+
         for (RiskEvent activeRiskEvent : riskEventRepository.findByWorker_IdAndStatusInOrderByOccurredAtDesc(workerId, ACTIVE_STATUSES)) {
             riskLevel = max(riskLevel, activeRiskEvent.getRiskLevel());
         }
@@ -93,11 +91,12 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         }
 
         RiskType riskType = determineRiskType(sensorLog);
-        RiskLevel riskLevel = determineRiskLevel(sensorLog);
-        if (riskLevel == RiskLevel.LV1 || riskType == null) {
+        RiskLevel sensorRiskLevel = determineRiskLevel(sensorLog);
+        if (sensorRiskLevel == RiskLevel.LV1 || riskType == null) {
             evaluateWorkerRisk(worker.getId());
             return null;
         }
+        RiskLevel riskLevel = evaluateWorkerRisk(worker.getId());
 
         RiskEvent existing = findActiveRiskEvent(worker.getId(), riskType);
         if (existing != null) {
@@ -225,7 +224,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
         if (sensorLog.getBpm() != null) {
             if (sensorLog.getBpm() < 40 || sensorLog.getBpm() > 140) {
-                return RiskLevel.LV4;
+                return RiskLevel.LV3;
             }
             if (sensorLog.getBpm() < 50 || sensorLog.getBpm() > 120) {
                 score = Math.max(score, 3);
@@ -236,7 +235,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
         if (sensorLog.getSpo2() != null) {
             if (sensorLog.getSpo2() < 88) {
-                return RiskLevel.LV4;
+                return RiskLevel.LV3;
             }
             if (sensorLog.getSpo2() < 92) {
                 score = Math.max(score, 3);
@@ -247,7 +246,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
 
         if (sensorLog.getBodyTemperature() != null) {
             if (sensorLog.getBodyTemperature() >= 39.0 || sensorLog.getBodyTemperature() <= 34.0) {
-                return RiskLevel.LV4;
+                return RiskLevel.LV3;
             }
             if (sensorLog.getBodyTemperature() >= 37.8 || sensorLog.getBodyTemperature() <= 35.0) {
                 score = Math.max(score, 3);
@@ -265,7 +264,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         double impactAmount = sensorLog.getImpactAmount() == null ? 0.0 : sensorLog.getImpactAmount();
 
         if (accelerationMagnitude >= 2.5 || maxTilt >= 60.0 || impactAmount >= 3.0) {
-            return RiskLevel.LV4;
+            return RiskLevel.LV3;
         }
         if (accelerationMagnitude >= 2.0 || maxTilt >= 45.0 || impactAmount >= 1.5) {
             return RiskLevel.LV3;
@@ -279,6 +278,14 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
                 equipmentList.stream().anyMatch(equipment ->
                         equipment.getType() == requiredType && equipment.getWearStatus() == WearStatus.WORN));
         return allRequiredEquipmentWorn ? RiskLevel.LV1 : RiskLevel.LV2;
+    }
+
+    private boolean isBiometricAbnormal(SensorLog sensorLog) {
+        return evaluateBiometricRiskLevel(sensorLog) != RiskLevel.LV1;
+    }
+
+    private boolean isMotionAbnormal(SensorLog sensorLog) {
+        return evaluateMotionRiskLevel(sensorLog) != RiskLevel.LV1;
     }
 
     private void createAlertIfNeeded(RiskEvent riskEvent) {
@@ -406,8 +413,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         return switch (riskLevel) {
             case LV1 -> AlertSeverity.INFO;
             case LV2 -> AlertSeverity.WARNING;
-            case LV3 -> AlertSeverity.DANGER;
-            case LV4 -> AlertSeverity.EMERGENCY;
+            case LV3, LV4 -> AlertSeverity.DANGER;
         };
     }
 
@@ -415,8 +421,7 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         return switch (riskEvent.getRiskLevel()) {
             case LV1 -> "정상";
             case LV2 -> "주의";
-            case LV3 -> "위험";
-            case LV4 -> "긴급";
+            case LV3, LV4 -> "위험";
         };
     }
 
@@ -429,7 +434,9 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     }
 
     private RiskLevel max(RiskLevel first, RiskLevel second) {
-        return first.ordinal() >= second.ordinal() ? first : second;
+        RiskLevel normalizedFirst = first == RiskLevel.LV4 ? RiskLevel.LV3 : first;
+        RiskLevel normalizedSecond = second == RiskLevel.LV4 ? RiskLevel.LV3 : second;
+        return normalizedFirst.ordinal() >= normalizedSecond.ordinal() ? normalizedFirst : normalizedSecond;
     }
 
     private double vectorMagnitude(Double x, Double y, Double z) {

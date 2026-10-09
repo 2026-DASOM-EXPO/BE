@@ -7,6 +7,8 @@ import com.worksafe.backend.domain.alert.converter.AlertConverter;
 import com.worksafe.backend.domain.alert.repository.AlertRepository;
 import com.worksafe.backend.domain.alert.service.AlertRealtimeService;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
+import com.worksafe.backend.domain.equipment.enums.EquipmentType;
+import com.worksafe.backend.domain.equipment.enums.WearStatus;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.global.common.exception.BusinessException;
 import com.worksafe.backend.global.common.exception.ErrorCode;
@@ -36,6 +38,8 @@ import java.util.List;
 @Transactional
 public class SensorLogServiceImpl implements SensorLogService {
 
+    private static final int VEST_LIGHT_WORN_THRESHOLD = 1000;
+
     private final SensorLogRepository sensorLogRepository;
     private final WorkerRepository workerRepository;
     private final EquipmentRepository equipmentRepository;
@@ -48,19 +52,23 @@ public class SensorLogServiceImpl implements SensorLogService {
         Worker worker = resolveWorker(request.workerId());
         Equipment equipment = resolveEquipment(request.equipmentId());
 
+        WearStatus detectedWearStatus = resolveWearStatus(request, equipment);
         SensorLog sensorLog = SensorLogConverter.toEntity(
                 request,
                 worker,
                 equipment
         );
+        if (detectedWearStatus != null) {
+            sensorLog.applyAssessment(detectedWearStatus, request.riskLevel());
+        }
         SensorLog saved = sensorLogRepository.save(sensorLog);
 
         if (request.latitude() != null && request.longitude() != null && worker != null) {
             worker.updateLocation(request.latitude(), request.longitude());
         }
 
-        if (request.wearStatus() != null && equipment != null) {
-            equipment.updateWearStatus(request.wearStatus(), LocalDateTime.now());
+        if (detectedWearStatus != null && equipment != null) {
+            equipment.updateWearStatus(detectedWearStatus, LocalDateTime.now());
         }
 
         if (Boolean.TRUE.equals(request.sosPressed()) && worker != null) {
@@ -96,6 +104,15 @@ public class SensorLogServiceImpl implements SensorLogService {
         }
 
         return SensorLogConverter.toResponse(saved);
+    }
+
+    private WearStatus resolveWearStatus(SensorLogCreateRequest request, Equipment equipment) {
+        if (equipment != null && equipment.getType() == EquipmentType.VEST && request.lightValue() != null) {
+            return request.lightValue() <= VEST_LIGHT_WORN_THRESHOLD
+                    ? WearStatus.WORN
+                    : WearStatus.NOT_WORN;
+        }
+        return request.wearStatus();
     }
 
     @Override
@@ -142,8 +159,7 @@ public class SensorLogServiceImpl implements SensorLogService {
         return switch (riskLevel) {
             case LV1 -> AlertSeverity.INFO;
             case LV2 -> AlertSeverity.WARNING;
-            case LV3 -> AlertSeverity.DANGER;
-            case LV4 -> AlertSeverity.EMERGENCY;
+            case LV3, LV4 -> AlertSeverity.DANGER;
         };
     }
 }
