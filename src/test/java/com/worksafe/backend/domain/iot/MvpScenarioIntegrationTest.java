@@ -10,21 +10,19 @@ import com.worksafe.backend.domain.drone.repository.DroneDispatchRepository;
 import com.worksafe.backend.domain.drone.repository.DroneRepository;
 import com.worksafe.backend.domain.drone.repository.DroneVideoRepository;
 import com.worksafe.backend.domain.equipment.entity.Equipment;
-import com.worksafe.backend.domain.equipment.entity.WearableCommand;
 import com.worksafe.backend.domain.equipment.enums.EquipmentStatus;
 import com.worksafe.backend.domain.equipment.enums.EquipmentType;
 import com.worksafe.backend.domain.equipment.enums.WearStatus;
-import com.worksafe.backend.domain.equipment.enums.WearableCommandType;
 import com.worksafe.backend.domain.equipment.repository.EquipmentRepository;
 import com.worksafe.backend.domain.equipment.repository.WearableCommandRepository;
 import com.worksafe.backend.domain.iot.dto.request.EquipmentStatusRequest;
+import com.worksafe.backend.domain.iot.dto.request.HeartRequest;
+import com.worksafe.backend.domain.iot.dto.request.ImuRequest;
 import com.worksafe.backend.domain.iot.dto.request.SosRequest;
 import com.worksafe.backend.domain.iot.dto.response.SosResponse;
 import com.worksafe.backend.domain.iot.service.IotService;
 import com.worksafe.backend.domain.risk.entity.RiskEvent;
 import com.worksafe.backend.domain.risk.enums.RiskLevel;
-import com.worksafe.backend.domain.risk.enums.RiskStatus;
-import com.worksafe.backend.domain.risk.enums.RiskType;
 import com.worksafe.backend.domain.risk.repository.RiskEventRepository;
 import com.worksafe.backend.domain.sensor.dto.response.SensorLogResponse;
 import com.worksafe.backend.domain.worker.entity.Worker;
@@ -130,7 +128,7 @@ class MvpScenarioIntegrationTest {
     }
 
     @Test
-    void oneOrMoreMissingRequiredEquipmentAlwaysStaysLv2AndNeverDispatchesDrone() {
+    void equipmentMissingWithoutHeartOrGyroAbnormalityStaysLv1() {
         SafetyFixture fixture = saveSafetyFixture("missing");
         saveReadyDrone("missing");
 
@@ -139,46 +137,75 @@ class MvpScenarioIntegrationTest {
         fixture.vest().updateWearStatus(WearStatus.NOT_WORN, LocalDateTime.of(2026, 7, 24, 10, 2, 3));
         SensorLogResponse third = iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
 
-        assertThat(first.riskLevel()).isEqualTo(RiskLevel.LV2);
-        assertThat(second.riskLevel()).isEqualTo(RiskLevel.LV2);
-        assertThat(third.riskLevel()).isEqualTo(RiskLevel.LV2);
-        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
-                .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
-                .extracting(RiskEvent::getRiskLevel)
-                .containsOnly(RiskLevel.LV2);
+        assertThat(first.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(second.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(third.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId())).isEmpty();
         assertThat(droneDispatchRepository.count()).isZero();
     }
 
     @Test
-    void lv2CreatesOneManagerAlertAndTargetsVestBuzzer() {
+    void bothEquipmentMissingAndOneAbnormalSensorCreatesLv2Alert() {
         SafetyFixture fixture = saveSafetyFixture("lv2");
 
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
         iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
+        SensorLogResponse heart = iotService.heart(new HeartRequest(fixture.worker().getId(), 130));
 
-        List<WearableCommand> commands = wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId());
+        assertThat(heart.riskLevel()).isEqualTo(RiskLevel.LV2);
         assertThat(alertRepository.count()).isEqualTo(1);
-        assertThat(commands).hasSize(1);
-        assertThat(commands.getFirst().getCommandType()).isEqualTo(WearableCommandType.BUZZER_ON);
-        assertThat(commands.getFirst().getEquipment().getType()).isEqualTo(EquipmentType.VEST);
+        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
+                .extracting(RiskEvent::getRiskLevel)
+                .containsOnly(RiskLevel.LV2);
     }
 
     @Test
-    void restoringAllRequiredEquipmentResolvesLv2AndQueuesBuzzerOff() {
+    void restoringEitherEquipmentReturnsWorkerToLv1() {
         SafetyFixture fixture = saveSafetyFixture("restore");
 
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
         iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
-        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.WORN));
+        iotService.heart(new HeartRequest(fixture.worker().getId(), 130));
+        assertThat(workerRepository.findById(fixture.worker().getId()).orElseThrow().getStatus())
+                .isEqualTo(WorkerStatus.WARNING);
 
-        assertThat(riskEventRepository.findByWorker_IdOrderByOccurredAtDesc(fixture.worker().getId()))
-                .filteredOn(event -> event.getRiskType() == RiskType.NO_EQUIPMENT)
-                .extracting(RiskEvent::getStatus)
-                .containsOnly(RiskStatus.RESOLVED);
-        assertThat(wearableCommandRepository.findByWorker_IdOrderByCreatedAtDesc(fixture.worker().getId()))
-                .extracting(WearableCommand::getCommandType)
-                .contains(WearableCommandType.BUZZER_ON, WearableCommandType.BUZZER_OFF);
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.WORN));
         assertThat(workerRepository.findById(fixture.worker().getId()).orElseThrow().getStatus())
                 .isEqualTo(WorkerStatus.NORMAL);
+    }
+
+    @Test
+    void bothEquipmentMissingAndHeartAndGyroAbnormalityCreatesLv3() {
+        SafetyFixture fixture = saveSafetyFixture("lv3-sensor");
+
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.vest(), WearStatus.NOT_WORN));
+        iotService.heart(new HeartRequest(fixture.worker().getId(), 130));
+        SensorLogResponse imu = iotService.imu(new ImuRequest(
+                fixture.worker().getId(),
+                0.0, 0.0, 0.0,
+                3.1, 0.0, 0.0
+        ));
+
+        assertThat(imu.riskLevel()).isEqualTo(RiskLevel.LV3);
+        assertThat(workerRepository.findById(fixture.worker().getId()).orElseThrow().getStatus())
+                .isEqualTo(WorkerStatus.DANGER);
+    }
+
+    @Test
+    void oneMissingEquipmentKeepsHeartAndGyroAbnormalityAtLv1() {
+        SafetyFixture fixture = saveSafetyFixture("lv1-sensor");
+
+        iotService.equipmentStatus(wearRequest(fixture.worker(), fixture.helmet(), WearStatus.NOT_WORN));
+        iotService.heart(new HeartRequest(fixture.worker().getId(), 110));
+        SensorLogResponse imu = iotService.imu(new ImuRequest(
+                fixture.worker().getId(),
+                0.0, 0.0, 0.0,
+                3.1, 0.0, 0.0
+        ));
+
+        assertThat(imu.riskLevel()).isEqualTo(RiskLevel.LV1);
+        assertThat(alertRepository.count()).isZero();
     }
 
     @Test
