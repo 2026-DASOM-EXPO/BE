@@ -38,6 +38,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -48,6 +49,10 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     private static final List<RiskStatus> ACTIVE_STATUSES = List.of(RiskStatus.OPEN, RiskStatus.PROCESSING);
     private static final Set<EquipmentType> REQUIRED_EQUIPMENT_TYPES =
             Set.of(EquipmentType.HELMET, EquipmentType.VEST);
+    // 경계값이 아닌 뚜렷한 이상값만 위험 판정에 사용합니다.
+    private static final int ABNORMAL_HEART_RATE_MIN = 50;
+    private static final int ABNORMAL_HEART_RATE_MAX = 120;
+    private static final double GYRO_ABNORMAL_THRESHOLD = 3.0;
 
     private final RiskEventRepository riskEventRepository;
     private final SensorLogRepository sensorLogRepository;
@@ -62,21 +67,23 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         Worker worker = getWorker(workerId);
         SensorLog biometricLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.BIOMETRIC);
         SensorLog motionLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.MOTION);
-        RiskLevel equipmentRiskLevel = evaluateEquipmentRiskLevel(workerId);
-        if (equipmentRiskLevel == RiskLevel.LV1) {
-            resolveEquipmentRiskIfRecovered(worker);
-        }
+        SensorLog sosLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.SOS);
 
-        boolean biometricAbnormal = biometricLog != null && isBiometricAbnormal(biometricLog);
-        boolean motionAbnormal = motionLog != null && isMotionAbnormal(motionLog);
-        RiskLevel riskLevel = biometricAbnormal && motionAbnormal
+        boolean bothEquipmentNotWorn = areBothRequiredEquipmentNotWorn(workerId);
+        boolean heartRateAbnormal = biometricLog != null && isHeartRateAbnormal(biometricLog);
+        boolean gyroAbnormal = motionLog != null && isGyroAbnormal(motionLog);
+        boolean sosPressed = sosLog != null && sosLog.isSosPressed();
+
+        // LV3: (안전모 미착용 AND 안전조끼 미착용 AND 심박수 이상 AND 자이로 이상) OR SOS
+        // LV2: 안전모 미착용 AND 안전조끼 미착용 AND (심박수 이상 OR 자이로 이상)
+        RiskLevel riskLevel = sosPressed || (bothEquipmentNotWorn && heartRateAbnormal && gyroAbnormal)
                 ? RiskLevel.LV3
-                : (biometricAbnormal || motionAbnormal || equipmentRiskLevel == RiskLevel.LV2
+                : bothEquipmentNotWorn && (heartRateAbnormal || gyroAbnormal)
                 ? RiskLevel.LV2
-                : RiskLevel.LV1);
+                : RiskLevel.LV1;
 
-        for (RiskEvent activeRiskEvent : riskEventRepository.findByWorker_IdAndStatusInOrderByOccurredAtDesc(workerId, ACTIVE_STATUSES)) {
-            riskLevel = max(riskLevel, activeRiskEvent.getRiskLevel());
+        if (riskLevel == RiskLevel.LV1) {
+            resolveEquipmentRiskIfRecovered(worker);
         }
 
         updateWorkerStatus(worker, riskLevel);
@@ -91,12 +98,14 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         }
 
         RiskType riskType = determineRiskType(sensorLog);
-        RiskLevel sensorRiskLevel = determineRiskLevel(sensorLog);
-        if (sensorRiskLevel == RiskLevel.LV1 || riskType == null) {
+        if (riskType == null || !isAbnormalRiskSensor(sensorLog)) {
             evaluateWorkerRisk(worker.getId());
             return null;
         }
         RiskLevel riskLevel = evaluateWorkerRisk(worker.getId());
+        if (riskLevel == RiskLevel.LV1) {
+            return null;
+        }
 
         RiskEvent existing = findActiveRiskEvent(worker.getId(), riskType);
         if (existing != null) {
@@ -131,10 +140,15 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
     @Override
     public RiskEventResponse evaluateByEquipmentStatus(Long workerId) {
         Worker worker = getWorker(workerId);
-        RiskLevel riskLevel = evaluateEquipmentRiskLevel(workerId);
+        RiskLevel riskLevel = evaluateWorkerRisk(workerId);
         if (riskLevel == RiskLevel.LV1) {
             resolveEquipmentRiskIfRecovered(worker);
-            updateWorkerStatus(worker, riskLevel);
+            return null;
+        }
+
+        // 장비 미착용만으로는 위험 이벤트를 만들지 않습니다.
+        // 현재 LV2/LV3가 SOS 때문이라면 장비 이벤트로 중복 기록하지 않습니다.
+        if (!areBothRequiredEquipmentNotWorn(workerId) || isCurrentSosPressed(workerId)) {
             return null;
         }
 
@@ -199,16 +213,6 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         updateWorkerStatus(riskEvent.getWorker(), riskEvent.getRiskLevel());
     }
 
-    private RiskLevel determineRiskLevel(SensorLog sensorLog) {
-        return switch (sensorLog.getSensorType()) {
-            case BIOMETRIC -> evaluateBiometricRiskLevel(sensorLog);
-            case MOTION -> evaluateMotionRiskLevel(sensorLog);
-            case WEAR_STATUS -> sensorLog.getWearStatus() == WearStatus.NOT_WORN ? RiskLevel.LV2 : RiskLevel.LV1;
-            case SOS -> RiskLevel.LV3;
-            default -> RiskLevel.LV1;
-        };
-    }
-
     private RiskType determineRiskType(SensorLog sensorLog) {
         return switch (sensorLog.getSensorType()) {
             case BIOMETRIC -> RiskType.BIOMETRIC_ABNORMAL;
@@ -219,73 +223,41 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         };
     }
 
-    private RiskLevel evaluateBiometricRiskLevel(SensorLog sensorLog) {
-        int score = 0;
-
-        if (sensorLog.getBpm() != null) {
-            if (sensorLog.getBpm() < 40 || sensorLog.getBpm() > 140) {
-                return RiskLevel.LV3;
-            }
-            if (sensorLog.getBpm() < 50 || sensorLog.getBpm() > 120) {
-                score = Math.max(score, 3);
-            } else if (sensorLog.getBpm() < 60 || sensorLog.getBpm() > 100) {
-                score = Math.max(score, 2);
-            }
-        }
-
-        if (sensorLog.getSpo2() != null) {
-            if (sensorLog.getSpo2() < 88) {
-                return RiskLevel.LV3;
-            }
-            if (sensorLog.getSpo2() < 92) {
-                score = Math.max(score, 3);
-            } else if (sensorLog.getSpo2() < 95) {
-                score = Math.max(score, 2);
-            }
-        }
-
-        if (sensorLog.getBodyTemperature() != null) {
-            if (sensorLog.getBodyTemperature() >= 39.0 || sensorLog.getBodyTemperature() <= 34.0) {
-                return RiskLevel.LV3;
-            }
-            if (sensorLog.getBodyTemperature() >= 37.8 || sensorLog.getBodyTemperature() <= 35.0) {
-                score = Math.max(score, 3);
-            } else if (sensorLog.getBodyTemperature() >= 37.3) {
-                score = Math.max(score, 2);
-            }
-        }
-
-        return toRiskLevel(score);
+    private boolean isAbnormalRiskSensor(SensorLog sensorLog) {
+        return switch (sensorLog.getSensorType()) {
+            case BIOMETRIC -> isHeartRateAbnormal(sensorLog);
+            case MOTION -> isGyroAbnormal(sensorLog);
+            case SOS -> sensorLog.isSosPressed();
+            default -> false;
+        };
     }
 
-    private RiskLevel evaluateMotionRiskLevel(SensorLog sensorLog) {
-        double accelerationMagnitude = vectorMagnitude(sensorLog.getAccelX(), sensorLog.getAccelY(), sensorLog.getAccelZ());
-        double maxTilt = maxAbs(sensorLog.getTiltX(), sensorLog.getTiltY(), sensorLog.getTiltZ());
-        double impactAmount = sensorLog.getImpactAmount() == null ? 0.0 : sensorLog.getImpactAmount();
-
-        if (accelerationMagnitude >= 2.5 || maxTilt >= 60.0 || impactAmount >= 3.0) {
-            return RiskLevel.LV3;
-        }
-        if (accelerationMagnitude >= 2.0 || maxTilt >= 45.0 || impactAmount >= 1.5) {
-            return RiskLevel.LV3;
-        }
-        return RiskLevel.LV1;
-    }
-
-    private RiskLevel evaluateEquipmentRiskLevel(Long workerId) {
+    private boolean areBothRequiredEquipmentNotWorn(Long workerId) {
         List<Equipment> equipmentList = equipmentRepository.findByWorker_IdOrderByUpdatedAtDesc(workerId);
-        boolean allRequiredEquipmentWorn = REQUIRED_EQUIPMENT_TYPES.stream().allMatch(requiredType ->
-                equipmentList.stream().anyMatch(equipment ->
-                        equipment.getType() == requiredType && equipment.getWearStatus() == WearStatus.WORN));
-        return allRequiredEquipmentWorn ? RiskLevel.LV1 : RiskLevel.LV2;
+        return REQUIRED_EQUIPMENT_TYPES.stream().allMatch(requiredType ->
+                latestEquipment(equipmentList, requiredType)
+                        .map(equipment -> equipment.getWearStatus() == WearStatus.NOT_WORN)
+                        .orElse(false));
     }
 
-    private boolean isBiometricAbnormal(SensorLog sensorLog) {
-        return evaluateBiometricRiskLevel(sensorLog) != RiskLevel.LV1;
+    private boolean isCurrentSosPressed(Long workerId) {
+        SensorLog sosLog = sensorLogRepository.findTopByWorker_IdAndSensorTypeOrderByMeasuredAtDesc(workerId, SensorType.SOS);
+        return sosLog != null && sosLog.isSosPressed();
     }
 
-    private boolean isMotionAbnormal(SensorLog sensorLog) {
-        return evaluateMotionRiskLevel(sensorLog) != RiskLevel.LV1;
+    private Optional<Equipment> latestEquipment(List<Equipment> equipmentList, EquipmentType equipmentType) {
+        return equipmentList.stream()
+                .filter(equipment -> equipment.getType() == equipmentType)
+                .findFirst();
+    }
+
+    private boolean isHeartRateAbnormal(SensorLog sensorLog) {
+        Integer bpm = sensorLog.getBpm();
+        return bpm != null && (bpm < ABNORMAL_HEART_RATE_MIN || bpm > ABNORMAL_HEART_RATE_MAX);
+    }
+
+    private boolean isGyroAbnormal(SensorLog sensorLog) {
+        return maxAbs(sensorLog.getGyroX(), sensorLog.getGyroY(), sensorLog.getGyroZ()) >= GYRO_ABNORMAL_THRESHOLD;
     }
 
     private void createAlertIfNeeded(RiskEvent riskEvent) {
@@ -425,25 +397,10 @@ public class RiskEvaluationServiceImpl implements RiskEvaluationService {
         };
     }
 
-    private RiskLevel toRiskLevel(int score) {
-        return switch (score) {
-            case 3 -> RiskLevel.LV3;
-            case 2 -> RiskLevel.LV2;
-            default -> RiskLevel.LV1;
-        };
-    }
-
     private RiskLevel max(RiskLevel first, RiskLevel second) {
         RiskLevel normalizedFirst = first == RiskLevel.LV4 ? RiskLevel.LV3 : first;
         RiskLevel normalizedSecond = second == RiskLevel.LV4 ? RiskLevel.LV3 : second;
         return normalizedFirst.ordinal() >= normalizedSecond.ordinal() ? normalizedFirst : normalizedSecond;
-    }
-
-    private double vectorMagnitude(Double x, Double y, Double z) {
-        double dx = x == null ? 0.0 : x;
-        double dy = y == null ? 0.0 : y;
-        double dz = z == null ? 0.0 : z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     private double maxAbs(Double x, Double y, Double z) {

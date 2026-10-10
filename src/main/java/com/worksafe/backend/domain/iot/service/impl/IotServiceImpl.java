@@ -104,12 +104,6 @@ public class IotServiceImpl implements IotService {
     @Override
     public SensorLogResponse heart(HeartRequest request) {
         Worker worker = getWorker(request.workerId());
-        Equipment vest = equipmentRepository
-                .findFirstByWorker_IdAndTypeOrderByUpdatedAtDesc(worker.getId(), EquipmentType.VEST)
-                .orElse(null);
-        if (vest != null) {
-            vest.updateWearStatus(WearStatus.WORN, LocalDateTime.now());
-        }
 
         SensorLog saved = saveOrUpdateCurrentByWorker(
                 worker,
@@ -126,9 +120,6 @@ public class IotServiceImpl implements IotService {
         saved.applyAssessment(null, riskLevel);
         SensorLogResponse response = SensorLogConverter.toResponse(saved);
         alertRealtimeService.publish("sensor", response);
-        if (vest != null) {
-            alertRealtimeService.publish("equipment", EquipmentConverter.toResponse(vest));
-        }
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
         return response;
     }
@@ -242,6 +233,9 @@ public class IotServiceImpl implements IotService {
         alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
 
         if (request.buttonValue() == 0) {
+            // SOS 해제 직후에도 최신 센서 조합으로 작업자 상태를 다시 계산합니다.
+            riskEvaluationService.evaluateWorkerRisk(worker.getId());
+            alertRealtimeService.publish("worker", WorkerConverter.toResponse(worker));
             return new SosResponse(0, false, null, null, false, false);
         }
 
